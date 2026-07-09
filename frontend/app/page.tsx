@@ -50,7 +50,8 @@ export default function Home() {
 
   useEffect(() => {
     // Load metadata from backend
-    fetch('http://localhost:8000/metadata')
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    fetch(`${apiUrl}/metadata`)
       .then(res => res.json())
       .then(data => {
         setMetadata(data)
@@ -65,11 +66,12 @@ export default function Home() {
 
   const handlePredict = async () => {
     if (!fileData) return
-    
+
     setLoading(true)
-    
+
     try {
-      const response = await fetch('http://localhost:8000/predict-batch', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/predict-batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
