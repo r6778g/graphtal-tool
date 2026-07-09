@@ -3,7 +3,8 @@ from flask_cors import CORS
 import predict
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+# Allow all origins for deployment - update with specific domain after Vercel deployment
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route("/")
 def read_root():
