@@ -54,8 +54,8 @@ build/
 Thumbs.db
 
 # Model files (optional - remove if you want to track models)
-backend/model/*.pkl
-backend/model/*.json
+# backend/model/*.pkl
+# backend/model/*.json
 
 # Logs
 *.log
