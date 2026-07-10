@@ -10,4 +10,4 @@ COPY backend/ .
 
 RUN python train.py
 
-CMD ["gunicorn", "main:app", "-w", "4", "--bind", "0.0.0.0:$PORT"]
+CMD ["gunicorn", "main:app", "-w", "4", "--threads", "2", "--bind", "0.0.0.0:$PORT"]
