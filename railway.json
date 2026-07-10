@@ -1,16 +1,12 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "cd backend && pip install -r requirements.txt && python train.py",
-    "watchPatterns": [
-      "/backend/**"
-    ]
+    "builder": "RAILPACK",
+    "buildEnvironment": "V3"
   },
   "deploy": {
     "runtime": "V2",
     "numReplicas": 1,
-    "startCommand": "cd backend && gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT",
     "sleepApplication": false,
     "useLegacyStacker": false,
     "ipv6EgressEnabled": false,
