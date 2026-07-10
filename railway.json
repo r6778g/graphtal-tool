@@ -1,12 +1,11 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
+    "builder": "NIXPACKS",
     "buildCommand": "cd backend && pip install -r requirements.txt && python train.py",
     "watchPatterns": [
       "/backend/**"
-    ],
-    "buildEnvironment": "V3"
+    ]
   },
   "deploy": {
     "runtime": "V2",
