@@ -14,6 +14,7 @@ import Recommendation from '@/components/Recommendation'
 import DistributionHistogram from '@/components/DistributionHistogram'
 import ResidualPlot from '@/components/ResidualPlot'
 import ModelMetrics from '@/components/ModelMetrics'
+import { API_BASE_URL } from '@/lib/api'
 import { FlaskConical, Loader2 } from 'lucide-react'
 
 // Mock data - replace with actual API calls
@@ -50,8 +51,7 @@ export default function Home() {
 
   useEffect(() => {
     // Load metadata from backend
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    fetch(`${apiUrl}/metadata`)
+    fetch(`${API_BASE_URL}/metadata`)
       .then(res => res.json())
       .then(data => {
         setMetadata(data)
@@ -70,8 +70,7 @@ export default function Home() {
     setLoading(true)
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/predict-batch`, {
+      const response = await fetch(`${API_BASE_URL}/predict-batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

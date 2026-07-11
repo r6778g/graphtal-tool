@@ -78,6 +78,18 @@ frontend/
 
 ## API Integration
 
+The frontend connects to the backend through `NEXT_PUBLIC_API_URL`. For production builds, the app falls back to:
+
+```bash
+https://graphtal-tool-production-07b7.up.railway.app
+```
+
+To override it locally, create `frontend/.env.local` with:
+
+```bash
+NEXT_PUBLIC_API_URL=https://graphtal-tool-production-07b7.up.railway.app
+```
+
 The frontend is designed to work with a FastAPI backend. Currently, it uses mock data for demonstration. To connect to the real backend:
 
 1. Update the API calls in `app/page.tsx` to fetch from your FastAPI endpoints:
