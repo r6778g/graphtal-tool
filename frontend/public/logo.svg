@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Black background -->
+  <rect width="100" height="100" fill="#000000"/>
+  <!-- Hexagon outline -->
+  <polygon points="50,5 93,27.5 93,72.5 50,95 7,72.5 7,27.5" fill="none" stroke="#c07020" stroke-width="4"/>
+  <!-- Graph nodes and edges inside hexagon -->
+  <!-- Top edge: node at ~(38,28) to (62,28) -->
+  <line x1="38" y1="28" x2="62" y2="28" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Left diagonal: (38,28) to (22,50) -->
+  <line x1="38" y1="28" x2="22" y2="50" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Left middle: (22,50) to (42,50) -->
+  <line x1="22" y1="50" x2="42" y2="50" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Middle: (42,50) to (62,50) -->
+  <line x1="42" y1="50" x2="62" y2="50" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Right diagonal: (62,50) to (62,28) — connects middle-right to top-right -->
+  <!-- Bottom-right diagonal: (62,50) to (62,72) -->
+  <line x1="62" y1="50" x2="62" y2="72" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Bottom-left diagonal: (22,50) to (38,72) -->
+  <line x1="22" y1="50" x2="38" y2="72" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Bottom edge: (38,72) to (62,72) -->
+  <line x1="38" y1="72" x2="62" y2="72" stroke="#c07020" stroke-width="2.5"/>
+  <!-- Nodes -->
+  <circle cx="38" cy="28" r="4" fill="#c07020"/>
+  <circle cx="62" cy="28" r="4" fill="#c07020"/>
+  <circle cx="22" cy="50" r="4" fill="#c07020"/>
+  <circle cx="42" cy="50" r="4" fill="#c07020"/>
+  <circle cx="62" cy="50" r="4" fill="#c07020"/>
+  <circle cx="38" cy="72" r="4" fill="#c07020"/>
+  <circle cx="62" cy="72" r="4" fill="#c07020"/>
+</svg>

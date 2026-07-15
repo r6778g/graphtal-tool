@@ -3,110 +3,129 @@ import numpy as np
 import json
 import os
 
+SUPPORTED_MODELS = ['ridge', 'lasso', 'svm', 'random_forest']
+DEFAULT_MODEL = 'ridge'
+
+
 class Predictor:
     def __init__(self):
-        self.models = {}
-        self.scalers = {}
+        self.models = {}   # {model_type: {target: model}}
+        self.scalers = {}  # {model_type: {target: scaler}}
         self.columns_config = None
         self.load_models()
-    
+
     def load_models(self):
-        """Load trained models and configuration."""
+        """Load all trained models and configuration."""
         try:
-            # Load column configuration
             with open('model/columns.json', 'r') as f:
                 self.columns_config = json.load(f)
-            
-            # Load default model and scaler
-            if os.path.exists('model/model.pkl'):
-                self.default_model = joblib.load('model/model.pkl')
-                self.default_scaler = joblib.load('model/scaler.pkl')
-            
-            # Load all available models
-            for output in self.columns_config['outputs']:
-                model_path = f'model/{output.lower()}_model.pkl'
-                scaler_path = f'model/{output.lower()}_scaler.pkl'
-                
-                if os.path.exists(model_path) and os.path.exists(scaler_path):
-                    self.models[output] = joblib.load(model_path)
-                    self.scalers[output] = joblib.load(scaler_path)
-            
-            print(f"Loaded {len(self.models)} models")
         except Exception as e:
-            print(f"Error loading models: {e}")
-    
-    def predict(self, target: str, features: dict) -> dict:
-        """
-        Make prediction for a specific target.
-        
-        Args:
-            target: The output column to predict
-            features: Dictionary of input features
-        
-        Returns:
-            Dictionary with prediction and metadata
-        """
+            print(f"Error loading columns config: {e}")
+            self.columns_config = {"inputs": [], "outputs": []}
+
+        outputs = self.columns_config.get('outputs', [])
+
+        for model_type in SUPPORTED_MODELS:
+            self.models[model_type] = {}
+            self.scalers[model_type] = {}
+
+            for output in outputs:
+                model_path = f'model/{model_type}/{output.lower()}_model.pkl'
+                scaler_path = f'model/{model_type}/{output.lower()}_scaler.pkl'
+
+                if os.path.exists(model_path) and os.path.exists(scaler_path):
+                    self.models[model_type][output] = joblib.load(model_path)
+                    self.scalers[model_type][output] = joblib.load(scaler_path)
+
+            # Fallback: load legacy flat models for the 'ridge' type
+            if model_type == DEFAULT_MODEL and not self.models[model_type]:
+                for output in outputs:
+                    flat_model = f'model/{output.lower()}_model.pkl'
+                    flat_scaler = f'model/{output.lower()}_scaler.pkl'
+                    if os.path.exists(flat_model) and os.path.exists(flat_scaler):
+                        self.models[model_type][output] = joblib.load(flat_model)
+                        self.scalers[model_type][output] = joblib.load(flat_scaler)
+
+        total = sum(len(v) for v in self.models.values())
+        print(f"Loaded {total} model/target combinations across {len(SUPPORTED_MODELS)} model types")
+
+    def _get_model_and_scaler(self, model_type: str, target: str):
+        """Return (model, scaler) for the given type and target, with fallbacks."""
+        mt = model_type if model_type in SUPPORTED_MODELS else DEFAULT_MODEL
+
+        # Try requested type first
+        if target in self.models.get(mt, {}):
+            return self.models[mt][target], self.scalers[mt][target]
+
+        # Fallback to ridge
+        if target in self.models.get(DEFAULT_MODEL, {}):
+            print(f"Warning: {mt} model not found for {target}, falling back to {DEFAULT_MODEL}")
+            return self.models[DEFAULT_MODEL][target], self.scalers[DEFAULT_MODEL][target]
+
+        # Fallback to any available model for this target
+        for fallback_type in SUPPORTED_MODELS:
+            if target in self.models.get(fallback_type, {}):
+                print(f"Warning: falling back to {fallback_type} for {target}")
+                return self.models[fallback_type][target], self.scalers[fallback_type][target]
+
+        return None, None
+
+    def predict(self, target: str, features: dict, model_type: str = DEFAULT_MODEL) -> dict:
+        """Make prediction for a specific target using the selected model type."""
         try:
-            # Get model and scaler for target
-            if target in self.models:
-                model = self.models[target]
-                scaler = self.scalers[target]
-            else:
-                # Fall back to default model
-                model = self.default_model
-                scaler = self.default_scaler
-            
-            # Prepare features in correct order
+            model, scaler = self._get_model_and_scaler(model_type, target)
+            if model is None:
+                return {"prediction": 0, "unit": "", "confidence": 0,
+                        "feature_importance": {}, "error": f"No model available for {target}"}
+
             input_columns = self.columns_config['inputs']
             feature_values = [features.get(col, 0) for col in input_columns]
-            
-            # Scale features
             features_scaled = scaler.transform([feature_values])
-            
-            # Make prediction
             prediction = model.predict(features_scaled)[0]
-            
-            # Calculate feature importance (coefficients)
-            importance = dict(zip(input_columns, np.abs(model.coef_)))
-            
+
+            # Feature importance
+            importance = {}
+            if hasattr(model, 'coef_'):
+                importance = dict(zip(input_columns, np.abs(model.coef_)))
+            elif hasattr(model, 'feature_importances_'):
+                importance = dict(zip(input_columns, model.feature_importances_))
+
             return {
                 "prediction": float(prediction),
                 "unit": "mg/L" if target == "Titer" else "",
-                "confidence": 0.85,  # Placeholder - should be calculated from model
-                "feature_importance": importance
+                "confidence": 0.85,
+                "feature_importance": importance,
+                "model_type": model_type
             }
-        
+
         except Exception as e:
             print(f"Prediction error: {e}")
-            return {
-                "prediction": 0,
-                "unit": "",
-                "confidence": 0,
-                "feature_importance": {},
-                "error": str(e)
-            }
-    
+            return {"prediction": 0, "unit": "", "confidence": 0,
+                    "feature_importance": {}, "error": str(e)}
+
     def get_metadata(self) -> dict:
-        """Get metadata about available inputs, outputs, and visualizations."""
-        if self.columns_config:
-            return self.columns_config
-        else:
-            return {
-                "inputs": [],
-                "outputs": [],
-                "visualizations": []
-            }
-    
-    def get_feature_importance(self, target: str) -> list:
-        """Get feature importance for a specific target."""
-        if target in self.models:
-            model = self.models[target]
-            input_columns = self.columns_config['inputs']
+        """Get metadata about available inputs, outputs, and model types."""
+        meta = dict(self.columns_config) if self.columns_config else {}
+        meta['model_types'] = SUPPORTED_MODELS
+        return meta
+
+    def get_feature_importance(self, target: str, model_type: str = DEFAULT_MODEL) -> list:
+        """Get feature importance for a specific target and model type."""
+        model, _ = self._get_model_and_scaler(model_type, target)
+        if model is None:
+            return []
+
+        input_columns = self.columns_config['inputs']
+        if hasattr(model, 'coef_'):
             importance = list(zip(input_columns, np.abs(model.coef_)))
-            # Sort by importance
-            importance.sort(key=lambda x: x[1], reverse=True)
-            return [{"feature": k, "importance": float(v)} for k, v in importance]
-        return []
+        elif hasattr(model, 'feature_importances_'):
+            importance = list(zip(input_columns, model.feature_importances_))
+        else:
+            return []
+
+        importance.sort(key=lambda x: x[1], reverse=True)
+        return [{"feature": k, "importance": float(v)} for k, v in importance]
+
 
 # Global predictor instance
 predictor = Predictor()

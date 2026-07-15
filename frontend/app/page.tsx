@@ -14,8 +14,10 @@ import Recommendation from '@/components/Recommendation'
 import DistributionHistogram from '@/components/DistributionHistogram'
 import ResidualPlot from '@/components/ResidualPlot'
 import ModelMetrics from '@/components/ModelMetrics'
+import ModelSelector from '@/components/ModelSelector'
 import { API_BASE_URL } from '@/lib/api'
-import { FlaskConical, Loader2 } from 'lucide-react'
+import Image from 'next/image'
+import { Loader2 } from 'lucide-react'
 
 // Mock data - replace with actual API calls
 const mockInputs = [
@@ -42,6 +44,7 @@ const mockVisualizations = [
 
 export default function Home() {
   const [selectedOutput, setSelectedOutput] = useState('Titer')
+  const [selectedModel, setSelectedModel] = useState('random_forest')
   const [selectedVisualizations, setSelectedVisualizations] = useState<string[]>(['Prediction Card'])
   const [loading, setLoading] = useState(false)
   const [prediction, setPrediction] = useState<number | null>(null)
@@ -77,6 +80,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           target: selectedOutput,
+          model: selectedModel,
           file_data: fileData
         })
       })
@@ -215,11 +219,16 @@ export default function Home() {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FlaskConical className="w-6 h-6 text-primary" />
-            </div>
+            <Image
+              src="/logo.svg"
+              alt="Graphtal Tool Logo"
+              width={44}
+              height={44}
+              className="rounded-lg"
+              priority
+            />
             <div>
-              <h1 className="text-xl font-bold">Intraclone ML Prediction</h1>
+              <h1 className="text-xl font-bold">Graphtal Tool</h1>
               <p className="text-sm text-muted-foreground">Bioprocess Optimization Dashboard</p>
             </div>
           </div>
@@ -234,6 +243,13 @@ export default function Home() {
             outputs={mockOutputs}
             selected={selectedOutput}
             onSelect={setSelectedOutput}
+            disabled={loading}
+          />
+
+          {/* Model Selector */}
+          <ModelSelector
+            selected={selectedModel}
+            onSelect={setSelectedModel}
             disabled={loading}
           />
 
@@ -319,7 +335,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t mt-12 py-6 bg-card/50">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>Intraclone ML Prediction Demo • Dynamic Bioprocess Optimization</p>
+          <p>Graphtal Tool • Dynamic Bioprocess Optimization</p>
         </div>
       </footer>
     </div>

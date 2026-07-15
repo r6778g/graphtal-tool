@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Intraclone ML Prediction Demo',
+  title: 'Graphtal Tool',
   description: 'Dynamic ML prediction and visualization for bioprocess optimization',
 }
 
