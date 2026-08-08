@@ -16,6 +16,7 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [detectedColumns, setDetectedColumns] = useState<string[]>([])
 
   const processCSV = useCallback((file: File) => {
     return new Promise<Record<string, number[]>>((resolve, reject) => {
@@ -121,6 +122,7 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
       
       setFile(selectedFile)
       setSuccess(true)
+      setDetectedColumns(Object.keys(parsedData))
       onDataLoaded(parsedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to process file')
@@ -152,6 +154,7 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
     setFile(null)
     setError(null)
     setSuccess(false)
+    setDetectedColumns([])
   }
 
   return (
@@ -220,9 +223,24 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
           </div>
 
           {success && (
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-              <CheckCircle className="w-4 h-4" />
-              <span>File processed successfully</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle className="w-4 h-4" />
+                <span>File processed successfully</span>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-4">
+                <p className="text-sm font-medium mb-2">Detected Input Parameters ({detectedColumns.length}):</p>
+                <div className="flex flex-wrap gap-2">
+                  {detectedColumns.map((column) => (
+                    <span
+                      key={column}
+                      className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20"
+                    >
+                      {column}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
