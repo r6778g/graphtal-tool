@@ -107,5 +107,57 @@ def get_feature_importance(target):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/recommend-model", methods=["POST"])
+def recommend_model():
+    """Recommend the best model based on dataset analysis."""
+    try:
+        data = request.get_json()
+        target = data.get("target")
+        file_data = data.get("file_data", {})
+
+        if not file_data:
+            return jsonify({"error": "No file data provided"}), 400
+
+        # Simple model recommendation logic based on dataset characteristics
+        num_rows = len(file_data.get(list(file_data.keys())[0], []))
+        num_features = len(file_data)
+
+        recommendation = {
+            "recommended_model": "random_forest",
+            "reason": "Random Forest is recommended for this dataset due to its ability to handle non-linear relationships and feature interactions.",
+            "alternatives": [
+                {
+                    "model": "ridge",
+                    "reason": "Good for linear relationships with many features"
+                },
+                {
+                    "model": "lasso",
+                    "reason": "Good for feature selection with sparse data"
+                },
+                {
+                    "model": "elastic_net",
+                    "reason": "Balanced approach for mixed feature importance"
+                }
+            ],
+            "dataset_info": {
+                "num_rows": num_rows,
+                "num_features": num_features,
+                "target": target
+            }
+        }
+
+        # Adjust recommendation based on dataset size
+        if num_rows < 50:
+            recommendation["recommended_model"] = "ridge"
+            recommendation["reason"] = "Ridge regression is recommended for smaller datasets to avoid overfitting."
+        elif num_features > 15:
+            recommendation["recommended_model"] = "lasso"
+            recommendation["reason"] = "Lasso is recommended for high-dimensional data to perform feature selection."
+
+        return jsonify(recommendation)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
