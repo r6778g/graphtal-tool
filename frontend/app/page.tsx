@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import DynamicForm from '@/components/DynamicForm'
 import OutputSelector from '@/components/OutputSelector'
 import VisualizationSelector from '@/components/VisualizationSelector'
@@ -69,8 +69,8 @@ export default function Home() {
       })
   }, [])
 
-  const handlePredict = async () => {
-    if (!fileData) return
+  const handlePredict = useCallback(async () => {
+    if (!fileData || loading) return
 
     setLoading(true)
 
@@ -198,7 +198,14 @@ export default function Home() {
     }
     
     setLoading(false)
-  }
+  }, [fileData, selectedOutput, selectedModel, loading])
+
+  // Dynamic recalculation when inputs, outputs, model, or visualizations change
+  useEffect(() => {
+    if (fileData && selectedOutput && selectedModel && !loading) {
+      handlePredict()
+    }
+  }, [selectedOutput, selectedModel, selectedParameters, handlePredict])
 
   const toggleVisualization = (viz: string) => {
     setSelectedVisualizations(prev =>
