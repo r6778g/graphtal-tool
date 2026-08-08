@@ -50,6 +50,7 @@ export default function Home() {
   const [prediction, setPrediction] = useState<number | null>(null)
   const [predictionData, setPredictionData] = useState<any>(null)
   const [fileData, setFileData] = useState<Record<string, number[]> | undefined>(undefined)
+  const [selectedParameters, setSelectedParameters] = useState<string[]>([])
   const [metadata, setMetadata] = useState<any>(null)
 
   useEffect(() => {
@@ -210,7 +211,12 @@ export default function Home() {
     setFileData(data)
     // Update inputs based on file columns
     const fileInputs = Object.keys(data)
+    setSelectedParameters(fileInputs)
     // You could update mockInputs here or use fileInputs directly
+  }
+
+  const handleParametersSelected = (parameters: string[]) => {
+    setSelectedParameters(parameters)
   }
 
   return (
@@ -241,6 +247,7 @@ export default function Home() {
           {/* File Upload */}
           <FileUpload
             onDataLoaded={handleFileDataLoaded}
+            onParametersSelected={handleParametersSelected}
             loading={loading}
           />
 

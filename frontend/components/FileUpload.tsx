@@ -8,15 +8,17 @@ import * as XLSX from 'xlsx'
 
 interface FileUploadProps {
   onDataLoaded: (data: Record<string, number[]>) => void
+  onParametersSelected?: (parameters: string[]) => void
   loading?: boolean
 }
 
-export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
+export default function FileUpload({ onDataLoaded, onParametersSelected, loading }: FileUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [detectedColumns, setDetectedColumns] = useState<string[]>([])
+  const [selectedParameters, setSelectedParameters] = useState<Set<string>>(new Set())
 
   const processCSV = useCallback((file: File) => {
     return new Promise<Record<string, number[]>>((resolve, reject) => {
@@ -122,7 +124,9 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
       
       setFile(selectedFile)
       setSuccess(true)
-      setDetectedColumns(Object.keys(parsedData))
+      const columns = Object.keys(parsedData)
+      setDetectedColumns(columns)
+      setSelectedParameters(new Set(columns))
       onDataLoaded(parsedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to process file')
@@ -155,6 +159,30 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
     setError(null)
     setSuccess(false)
     setDetectedColumns([])
+    setSelectedParameters(new Set())
+  }
+
+  const toggleParameter = (parameter: string) => {
+    setSelectedParameters(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(parameter)) {
+        newSet.delete(parameter)
+      } else {
+        newSet.add(parameter)
+      }
+      onParametersSelected?.(Array.from(newSet))
+      return newSet
+    })
+  }
+
+  const selectAllParameters = () => {
+    setSelectedParameters(new Set(detectedColumns))
+    onParametersSelected?.(detectedColumns)
+  }
+
+  const deselectAllParameters = () => {
+    setSelectedParameters(new Set())
+    onParametersSelected?.([])
   }
 
   return (
@@ -229,15 +257,41 @@ export default function FileUpload({ onDataLoaded, loading }: FileUploadProps) {
                 <span>File processed successfully</span>
               </div>
               <div className="bg-secondary/50 rounded-lg p-4">
-                <p className="text-sm font-medium mb-2">Detected Input Parameters ({detectedColumns.length}):</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium">Select Input Parameters ({selectedParameters.size}/{detectedColumns.length}):</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={selectAllParameters}
+                      disabled={loading}
+                      className="text-xs px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors disabled:opacity-50"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={deselectAllParameters}
+                      disabled={loading}
+                      className="text-xs px-2 py-1 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded transition-colors disabled:opacity-50"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {detectedColumns.map((column) => (
-                    <span
+                    <button
                       key={column}
-                      className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20"
+                      onClick={() => toggleParameter(column)}
+                      disabled={loading}
+                      className={cn(
+                        "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
+                        selectedParameters.has(column)
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20",
+                        loading && "opacity-50 cursor-not-allowed"
+                      )}
                     >
                       {column}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
