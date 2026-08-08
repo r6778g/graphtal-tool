@@ -15,6 +15,7 @@ import DistributionHistogram from '@/components/DistributionHistogram'
 import ResidualPlot from '@/components/ResidualPlot'
 import ModelMetrics from '@/components/ModelMetrics'
 import ModelSelector from '@/components/ModelSelector'
+import ModelRecommendation from '@/components/ModelRecommendation'
 import { API_BASE_URL } from '@/lib/api'
 import Image from 'next/image'
 import { Loader2 } from 'lucide-react'
@@ -249,6 +250,14 @@ export default function Home() {
             onDataLoaded={handleFileDataLoaded}
             onParametersSelected={handleParametersSelected}
             loading={loading}
+          />
+
+          {/* Model Recommendation */}
+          <ModelRecommendation
+            target={selectedOutput}
+            fileData={fileData}
+            onModelSelect={setSelectedModel}
+            currentModel={selectedModel}
           />
 
           {/* Output Selector */}
