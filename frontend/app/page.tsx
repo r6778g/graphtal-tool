@@ -238,6 +238,12 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
+          {/* File Upload */}
+          <FileUpload
+            onDataLoaded={handleFileDataLoaded}
+            loading={loading}
+          />
+
           {/* Output Selector */}
           <OutputSelector
             outputs={mockOutputs}
@@ -259,12 +265,6 @@ export default function Home() {
             selected={selectedVisualizations}
             onToggle={toggleVisualization}
             disabled={loading}
-          />
-
-          {/* File Upload */}
-          <FileUpload
-            onDataLoaded={handleFileDataLoaded}
-            loading={loading}
           />
 
           {/* Dynamic Form */}
