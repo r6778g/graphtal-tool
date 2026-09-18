@@ -1,0 +1,47 @@
+{
+  "inputs": [
+    "Batch",
+    "Day",
+    "pH Online",
+    "pH Offline",
+    "Glucose",
+    "Lactate",
+    "Glutamine",
+    "Glutamate",
+    "Ammonia",
+    "Na+",
+    "K+",
+    "Ca++",
+    "Osmolality",
+    "pCO2"
+  ],
+  "outputs": [
+    "Titer",
+    "VCD",
+    "DCC",
+    "TCC",
+    "Viability",
+    "G0F",
+    "G1F",
+    "G2F",
+    "HM",
+    "Gal"
+  ],
+  "model_types": [
+    "ridge",
+    "lasso",
+    "svm",
+    "random_forest"
+  ],
+  "visualizations": [
+    "Prediction Card",
+    "Trend",
+    "Feature Importance",
+    "Correlation",
+    "Actual vs Predicted",
+    "Recommendation",
+    "Distribution Histogram",
+    "Residual Plot",
+    "Model Metrics"
+  ]
+}

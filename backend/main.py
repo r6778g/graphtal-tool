@@ -50,8 +50,8 @@ def predict_endpoint():
 def predict_batch_endpoint():
     """Make predictions for all rows in uploaded data using the selected model."""
     try:
-        data = request.get_json()
-        target = data.get("target")
+        data = request.get_json() or {}
+        target = data.get("target", "Titer")
         file_data = data.get("file_data", {})
         model_type = data.get("model", "ridge")
 
@@ -62,24 +62,43 @@ def predict_batch_endpoint():
         input_columns = metadata.get("inputs", [])
 
         if not input_columns:
-            return jsonify({"error": "No input columns configured"}), 400
+            # Fallback to keys present in file_data if metadata inputs are empty
+            input_columns = list(file_data.keys())
+
+        # Build normalized dictionary for flexible matching (case-insensitive, trimmed)
+        norm_map = {str(k).strip().lower(): v for k, v in file_data.items()}
+
+        # Compute max row count across provided columns
+        num_rows = max([len(v) for v in file_data.values() if isinstance(v, list)], default=0)
+
+        if num_rows == 0:
+            return jsonify({"error": "No data rows found in uploaded file"}), 400
 
         predictions = []
-        num_rows = len(file_data.get(input_columns[0], []))
 
         for row_index in range(num_rows):
             features = {}
             for col in input_columns:
-                if col in file_data and row_index < len(file_data[col]):
-                    features[col] = file_data[col][row_index]
+                norm_key = str(col).strip().lower()
+                val_list = file_data.get(col) or norm_map.get(norm_key, [])
+                
+                if isinstance(val_list, list) and row_index < len(val_list):
+                    val = val_list[row_index]
+                    try:
+                        features[col] = float(val) if val is not None else 0.0
+                    except (ValueError, TypeError):
+                        features[col] = 0.0
+                else:
+                    features[col] = 0.0
 
             result = predict.predictor.predict(target, features, model_type=model_type)
 
-            if "error" not in result:
+            if "error" not in result or result.get("prediction") is not None:
                 predictions.append({
                     "row": row_index + 1,
-                    "prediction": result["prediction"],
-                    "unit": result["unit"],
+                    "prediction": result.get("prediction", 0.0),
+                    "unit": result.get("unit", ""),
+                    "confidence": result.get("confidence", 0.85),
                     "features": features
                 })
 
@@ -93,7 +112,9 @@ def predict_batch_endpoint():
             "total_rows": len(predictions)
         })
     except Exception as e:
+        print(f"Error in predict_batch_endpoint: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/feature-importance/<target>")

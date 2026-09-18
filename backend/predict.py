@@ -16,11 +16,14 @@ class Predictor:
 
     def load_models(self):
         """Load all trained models and configuration."""
+        base_dir = 'model' if os.path.exists('model/columns.json') else 'backend/model'
+        columns_file = os.path.join(base_dir, 'columns.json')
+
         try:
-            with open('model/columns.json', 'r') as f:
+            with open(columns_file, 'r') as f:
                 self.columns_config = json.load(f)
         except Exception as e:
-            print(f"Error loading columns config: {e}")
+            print(f"Error loading columns config from {columns_file}: {e}")
             self.columns_config = {"inputs": [], "outputs": []}
 
         outputs = self.columns_config.get('outputs', [])
@@ -30,8 +33,8 @@ class Predictor:
             self.scalers[model_type] = {}
 
             for output in outputs:
-                model_path = f'model/{model_type}/{output.lower()}_model.pkl'
-                scaler_path = f'model/{model_type}/{output.lower()}_scaler.pkl'
+                model_path = os.path.join(base_dir, model_type, f"{output.lower()}_model.pkl")
+                scaler_path = os.path.join(base_dir, model_type, f"{output.lower()}_scaler.pkl")
 
                 if os.path.exists(model_path) and os.path.exists(scaler_path):
                     self.models[model_type][output] = joblib.load(model_path)
@@ -40,14 +43,15 @@ class Predictor:
             # Fallback: load legacy flat models for the 'ridge' type
             if model_type == DEFAULT_MODEL and not self.models[model_type]:
                 for output in outputs:
-                    flat_model = f'model/{output.lower()}_model.pkl'
-                    flat_scaler = f'model/{output.lower()}_scaler.pkl'
+                    flat_model = os.path.join(base_dir, f"{output.lower()}_model.pkl")
+                    flat_scaler = os.path.join(base_dir, f"{output.lower()}_scaler.pkl")
                     if os.path.exists(flat_model) and os.path.exists(flat_scaler):
                         self.models[model_type][output] = joblib.load(flat_model)
                         self.scalers[model_type][output] = joblib.load(flat_scaler)
 
         total = sum(len(v) for v in self.models.values())
-        print(f"Loaded {total} model/target combinations across {len(SUPPORTED_MODELS)} model types")
+        print(f"Loaded {total} model/target combinations across {len(SUPPORTED_MODELS)} model types from {base_dir}")
+
 
     def _get_model_and_scaler(self, model_type: str, target: str):
         """Return (model, scaler) for the given type and target, with fallbacks."""

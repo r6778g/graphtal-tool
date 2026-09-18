@@ -1,358 +1,131 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import DynamicForm from '@/components/DynamicForm'
-import OutputSelector from '@/components/OutputSelector'
-import VisualizationSelector from '@/components/VisualizationSelector'
-import FileUpload from '@/components/FileUpload'
-import PredictionCard from '@/components/PredictionCard'
-import TrendChart from '@/components/TrendChart'
-import FeatureImportance from '@/components/FeatureImportance'
-import CorrelationHeatmap from '@/components/CorrelationHeatmap'
-import ActualPrediction from '@/components/ActualPrediction'
-import Recommendation from '@/components/Recommendation'
-import DistributionHistogram from '@/components/DistributionHistogram'
-import ResidualPlot from '@/components/ResidualPlot'
-import ModelMetrics from '@/components/ModelMetrics'
-import ModelSelector from '@/components/ModelSelector'
-import ModelRecommendation from '@/components/ModelRecommendation'
-import { API_BASE_URL } from '@/lib/api'
-import Image from 'next/image'
-import { Loader2 } from 'lucide-react'
-
-// Mock data - replace with actual API calls
-const mockInputs = [
-  'Batch', 'Day', 'pH Online', 'pH Offline', 'Glucose', 'Lactate', 
-  'Glutamine', 'Glutamate', 'Ammonia', 'Na+', 'K+', 'Ca++', 
-  'Osmolality', 'pCO2', 'VCD', 'Viability'
-]
-
-const mockOutputs = [
-  'Titer', 'VCD', 'DCC', 'TCC', 'Viability', 'G0F', 'G1F', 'G2F', 'HM', 'Gal'
-]
-
-const mockVisualizations = [
-  'Prediction Card',
-  'Trend',
-  'Feature Importance',
-  'Correlation',
-  'Actual vs Predicted',
-  'Recommendation',
-  'Distribution Histogram',
-  'Residual Plot',
-  'Model Metrics'
-]
+import Link from 'next/link'
+import { 
+  TrendingUp, 
+  Filter, 
+  TestTube, 
+  Scale, 
+  BarChart3, 
+  Activity 
+} from 'lucide-react'
 
 export default function Home() {
-  const [selectedOutput, setSelectedOutput] = useState('Titer')
-  const [selectedModel, setSelectedModel] = useState('random_forest')
-  const [selectedVisualizations, setSelectedVisualizations] = useState<string[]>(['Prediction Card'])
-  const [loading, setLoading] = useState(false)
-  const [prediction, setPrediction] = useState<number | null>(null)
-  const [predictionData, setPredictionData] = useState<any>(null)
-  const [fileData, setFileData] = useState<Record<string, number[]> | undefined>(undefined)
-  const [selectedParameters, setSelectedParameters] = useState<string[]>([])
-  const [metadata, setMetadata] = useState<any>(null)
-
-  useEffect(() => {
-    // Load metadata from backend
-    fetch(`${API_BASE_URL}/metadata`)
-      .then(res => res.json())
-      .then(data => {
-        setMetadata(data)
-        if (data.outputs && data.outputs.length > 0) {
-          setSelectedOutput(data.outputs[0])
-        }
-      })
-      .catch(err => {
-        console.error('Failed to load metadata:', err)
-      })
-  }, [])
-
-  const handlePredict = async () => {
-    if (!fileData) return
-
-    setLoading(true)
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/predict-batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          target: selectedOutput,
-          model: selectedModel,
-          file_data: fileData
-        })
-      })
-      
-      if (!response.ok) {
-        throw new Error('Prediction failed')
-      }
-      
-      const result = await response.json()
-      
-      // Process batch predictions
-      const predictions = result.predictions || []
-      
-      // Generate visualization data from predictions
-      const trendData = predictions.map((p: any, i: number) => ({
-        name: `Row ${p.row}`,
-        value: p.prediction
-      }))
-
-      const actualPredictedData = predictions.map((p: any) => ({
-        actual: p.prediction * (0.9 + Math.random() * 0.2), // Simulate actual values
-        predicted: p.prediction
-      }))
-
-      const correlationData = []
-      const features = Object.keys(predictions[0]?.features || {})
-      for (let i = 0; i < features.length; i++) {
-        for (let j = 0; j < features.length; j++) {
-          correlationData.push({
-            x: features[i],
-            y: features[j],
-            value: i === j ? 1 : (Math.random() * 2 - 1) * 0.8
-          })
-        }
-      }
-
-      const recommendations = [
-        {
-          type: 'info' as const,
-          message: `Based on the predictions, consider optimizing ${features[0] || 'key parameters'} for better results.`,
-          parameter: features[0] || 'Process Parameters'
-        },
-        {
-          type: 'warning' as const,
-          message: 'Monitor the predicted values closely to ensure they stay within acceptable ranges.',
-          parameter: 'Quality Control'
-        }
-      ]
-
-      // Generate distribution histogram data
-      const predValues = predictions.map((p: any) => p.prediction)
-      const minVal = Math.min(...predValues)
-      const maxVal = Math.max(...predValues)
-      const binCount = 5
-      const binSize = (maxVal - minVal) / binCount
-      const distributionData = []
-      
-      for (let i = 0; i < binCount; i++) {
-        const binStart = minVal + i * binSize
-        const binEnd = binStart + binSize
-        const count = predValues.filter((v: number) => v >= binStart && v < binEnd).length
-        distributionData.push({
-          range: `${binStart.toFixed(1)}-${binEnd.toFixed(1)}`,
-          count
-        })
-      }
-
-      // Generate residual plot data
-      const residualsData = actualPredictedData.map((d: any) => ({
-        predicted: d.predicted,
-        residual: d.actual - d.predicted
-      }))
-
-      // Generate model metrics
-      const metrics = {
-        r2: 0.85 + Math.random() * 0.1,
-        mse: Math.random() * 100,
-        mae: Math.random() * 50,
-        rmse: Math.random() * 20
-      }
-
-      setPredictionData({
-        predictions: predictions,
-        featureImportance: result.feature_importance || [],
-        trend: trendData,
-        correlation: correlationData,
-        actualPredicted: actualPredictedData,
-        recommendations: recommendations,
-        distribution: distributionData,
-        residuals: residualsData,
-        metrics: metrics,
-        target: selectedOutput,
-        unit: predictions[0]?.unit || '',
-        totalRows: result.total_rows || 0
-      })
-    } catch (error) {
-      console.error('Prediction error:', error)
-      setPredictionData({
-        predictions: [],
-        featureImportance: [],
-        trend: [],
-        correlation: [],
-        actualPredicted: [],
-        recommendations: [],
-        distribution: [],
-        residuals: [],
-        metrics: {},
-        target: selectedOutput,
-        unit: '',
-        totalRows: 0,
-        error: 'Failed to generate predictions'
-      })
+  const tools = [
+    // Row 1
+    {
+      id: 'upstream',
+      title: 'Upstream Modeling',
+      description: 'Predictive modeling tools',
+      icon: TrendingUp,
+      href: '/upstream'
+    },
+    {
+      id: 'downstream',
+      title: 'Downstream Modeling',
+      description: 'Purification & chromatography tools',
+      icon: Filter,
+      href: '/upstream'
+    },
+    {
+      id: 'formulation',
+      title: 'Formulation',
+      description: 'Formulation & fill-finish analytics',
+      icon: TestTube,
+      href: '/upstream'
+    },
+    // Row 2
+    {
+      id: 'scale-up',
+      title: 'Scale up/Scale insights',
+      description: 'Optimize your bioprocess scaling',
+      icon: Scale,
+      href: '/upstream'
+    },
+    {
+      id: 'apqr',
+      title: 'Annual Product Quality Review (APQR)',
+      description: 'APQR reporting and analysis',
+      icon: BarChart3,
+      href: '/upstream'
+    },
+    {
+      id: 'process-economics',
+      title: 'Process Economics',
+      description: 'Analyze cost and efficiency',
+      icon: Activity,
+      href: '/upstream'
     }
-    
-    setLoading(false)
-  }
-
-  const toggleVisualization = (viz: string) => {
-    setSelectedVisualizations(prev =>
-      prev.includes(viz)
-        ? prev.filter(v => v !== viz)
-        : [...prev, viz]
-    )
-  }
-
-  const handleFileDataLoaded = (data: Record<string, number[]>) => {
-    setFileData(data)
-    // Update inputs based on file columns
-    const fileInputs = Object.keys(data)
-    setSelectedParameters(fileInputs)
-    // You could update mockInputs here or use fileInputs directly
-  }
-
-  const handleParametersSelected = (parameters: string[]) => {
-    setSelectedParameters(parameters)
-  }
+  ]
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Image
+    <div className="min-h-screen bg-[#faf8f5] text-[#1b2535] flex flex-col justify-between relative overflow-hidden font-sans">
+      {/* Soft Ambient Background Light Effect */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-amber-200/30 blur-[120px] rounded-full pointer-events-none -translate-x-1/3 -translate-y-1/3" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-amber-200/40 blur-[140px] rounded-full pointer-events-none translate-x-1/4 translate-y-1/4" />
+
+      {/* Main Container */}
+      <main className="container mx-auto px-4 py-16 flex-1 flex flex-col items-center justify-center max-w-6xl relative z-10">
+
+        {/* Logo and Title Row */}
+        <div className="flex items-center gap-4 mb-6">
+          {/* Logo Box */}
+          <div className="w-20 h-20 rounded-[22px] bg-[#f2ebe2] border border-[#e5dcd0] flex items-center justify-center shadow-xs">
+            <img
               src="/logo.svg"
               alt="Graphtal Tool Logo"
-              width={44}
-              height={44}
-              className="rounded-lg"
-              priority
+              className="w-10 h-10"
             />
-            <div>
-              <h1 className="text-xl font-bold">Graphtal Tool</h1>
-              <p className="text-sm text-muted-foreground">Bioprocess Optimization Dashboard</p>
-            </div>
           </div>
+
+          {/* Title */}
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-[#1e293b]">
+            Graphtal <span className="text-[#d97706]">Toolbox</span>
+          </h1>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          {/* File Upload */}
-          <FileUpload
-            onDataLoaded={handleFileDataLoaded}
-            onParametersSelected={handleParametersSelected}
-            loading={loading}
-          />
+        {/* Description Paragraph */}
+        <p className="text-center text-[#475569] max-w-xl text-xs sm:text-sm leading-relaxed mb-12 font-normal">
+          Unleash the power of advanced machine learning with our Next generation Toolbox. 
+          This cloud based application, effortlessly, revolutionizes how you scale-up, 
+          process economics and bioprocess modelling.
+        </p>
 
-          {/* Model Recommendation */}
-          <ModelRecommendation
-            target={selectedOutput}
-            fileData={fileData}
-            onModelSelect={setSelectedModel}
-            currentModel={selectedModel}
-          />
+        {/* 6 Tool Cards Grid (3 Columns x 2 Rows) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+          {tools.map((tool) => {
+            const Icon = tool.icon
+            return (
+              <Link
+                key={tool.id}
+                href={tool.href}
+                className="group bg-[#f4efe8] hover:bg-[#eee7dc] transition-all duration-300 rounded-[22px] p-8 flex flex-col items-center text-center justify-center min-h-[190px] border border-[#e8dfd3]/70 shadow-2xs hover:shadow-md cursor-pointer"
+              >
+                {/* Two-Tone Icon Container */}
+                <div className="mb-4 relative flex items-center justify-center">
+                  <Icon className="w-9 h-9 text-[#1e293b] stroke-[1.75]" />
+                  {/* Subtle orange accent bar/dot for APQR bar chart or icons */}
+                  {tool.id === 'apqr' && (
+                    <div className="absolute right-0 bottom-0 w-2 h-5 bg-[#d97706] rounded-xs" />
+                  )}
+                </div>
 
-          {/* Output Selector */}
-          <OutputSelector
-            outputs={mockOutputs}
-            selected={selectedOutput}
-            onSelect={setSelectedOutput}
-            disabled={loading}
-          />
+                <h3 className="font-bold text-base text-[#1e293b] mb-1.5 leading-snug">
+                  {tool.title}
+                </h3>
 
-          {/* Model Selector */}
-          <ModelSelector
-            selected={selectedModel}
-            onSelect={setSelectedModel}
-            disabled={loading}
-          />
-
-          {/* Visualization Selector */}
-          <VisualizationSelector
-            visualizations={mockVisualizations}
-            selected={selectedVisualizations}
-            onToggle={toggleVisualization}
-            disabled={loading}
-          />
-
-          {/* Dynamic Form */}
-          <DynamicForm
-            onSubmit={handlePredict}
-            loading={loading}
-            fileData={fileData}
-          />
-
-          {/* Loading State */}
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                <p className="text-sm text-muted-foreground">Generating prediction...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Visualizations */}
-          {predictionData && !loading && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {selectedVisualizations.includes('Prediction Card') && predictionData.predictions && predictionData.predictions.length > 0 && (
-                <PredictionCard
-                  prediction={predictionData.predictions[0].prediction}
-                  target={predictionData.target}
-                  unit={predictionData.unit}
-                  confidence={predictionData.predictions[0].confidence || 0.85}
-                />
-              )}
-
-              {selectedVisualizations.includes('Trend') && (
-                <TrendChart data={predictionData.trend} />
-              )}
-
-              {selectedVisualizations.includes('Feature Importance') && (
-                <FeatureImportance data={predictionData.featureImportance} />
-              )}
-
-              {selectedVisualizations.includes('Correlation') && (
-                <CorrelationHeatmap data={predictionData.correlation} />
-              )}
-
-              {selectedVisualizations.includes('Actual vs Predicted') && (
-                <ActualPrediction data={predictionData.actualPredicted} />
-              )}
-
-              {selectedVisualizations.includes('Recommendation') && (
-                <Recommendation recommendations={predictionData.recommendations} />
-              )}
-
-              {selectedVisualizations.includes('Distribution Histogram') && (
-                <DistributionHistogram data={predictionData.distribution} />
-              )}
-
-              {selectedVisualizations.includes('Residual Plot') && (
-                <ResidualPlot data={predictionData.residuals} />
-              )}
-
-              {selectedVisualizations.includes('Model Metrics') && (
-                <ModelMetrics metrics={predictionData.metrics} />
-              )}
-            </div>
-          )}
+                <p className="text-xs text-[#64748b] leading-relaxed">
+                  {tool.description}
+                </p>
+              </Link>
+            )
+          })}
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t mt-12 py-6 bg-card/50">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>Graphtal Tool • Dynamic Bioprocess Optimization</p>
-        </div>
+      {/* Minimal Footer */}
+      <footer className="py-6 text-center text-xs text-[#94a3b8]">
+        <p>© 2026 Graphtal Tool • Bioprocess Intelligence Platform</p>
       </footer>
     </div>
   )

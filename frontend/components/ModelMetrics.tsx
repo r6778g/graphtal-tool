@@ -1,8 +1,5 @@
 'use client'
 
-import { BarChart3, TrendingUp, Target, Activity } from 'lucide-react'
-import { cn } from '@/lib/utils'
-
 interface ModelMetricsProps {
   metrics: {
     r2?: number
@@ -15,65 +12,60 @@ interface ModelMetricsProps {
 
 export default function ModelMetrics({ 
   metrics, 
-  title = 'Model Performance Metrics' 
+  title = 'Model Evaluation Metrics' 
 }: ModelMetricsProps) {
+  if (!metrics || Object.keys(metrics).length === 0) {
+    return (
+      <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
+        <h3 className="text-base font-extrabold text-[#1e293b] mb-4">{title}</h3>
+        <div className="text-center py-8 text-[#64748b]">
+          <p className="text-xs font-medium">No metrics available</p>
+        </div>
+      </div>
+    )
+  }
+
   const metricItems = [
     {
-      label: 'R² Score',
-      value: metrics.r2 !== undefined ? metrics.r2.toFixed(3) : 'N/A',
-      icon: <Target className="w-5 h-5 text-green-500" />,
-      description: 'Coefficient of determination',
-      color: 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800'
+      label: 'R² Score (Accuracy)',
+      value: metrics.r2 !== undefined ? `${(metrics.r2 * 100).toFixed(2)}%` : 'N/A',
+      description: 'Variance explained by model',
+      color: 'text-[#b45309]'
     },
     {
-      label: 'MSE',
-      value: metrics.mse !== undefined ? metrics.mse.toFixed(3) : 'N/A',
-      icon: <BarChart3 className="w-5 h-5 text-blue-500" />,
-      description: 'Mean Squared Error',
-      color: 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800'
+      label: 'Root Mean Squared Error (RMSE)',
+      value: metrics.rmse !== undefined ? metrics.rmse.toFixed(2) : 'N/A',
+      description: 'Standard deviation of residuals',
+      color: 'text-[#1e293b]'
     },
     {
-      label: 'MAE',
-      value: metrics.mae !== undefined ? metrics.mae.toFixed(3) : 'N/A',
-      icon: <Activity className="w-5 h-5 text-purple-500" />,
-      description: 'Mean Absolute Error',
-      color: 'bg-purple-50 border-purple-200 dark:bg-purple-950 dark:border-purple-800'
+      label: 'Mean Absolute Error (MAE)',
+      value: metrics.mae !== undefined ? metrics.mae.toFixed(2) : 'N/A',
+      description: 'Average magnitude of errors',
+      color: 'text-[#1e293b]'
     },
     {
-      label: 'RMSE',
-      value: metrics.rmse !== undefined ? metrics.rmse.toFixed(3) : 'N/A',
-      icon: <TrendingUp className="w-5 h-5 text-orange-500" />,
-      description: 'Root Mean Squared Error',
-      color: 'bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800'
+      label: 'Mean Squared Error (MSE)',
+      value: metrics.mse !== undefined ? metrics.mse.toFixed(2) : 'N/A',
+      description: 'Average squared difference',
+      color: 'text-[#1e293b]'
     }
   ]
 
   return (
-    <div className="bg-card border rounded-lg p-6 shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">{title}</h3>
+    <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
+      <h3 className="text-base font-extrabold text-[#1e293b] mb-4">{title}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {metricItems.map((item, index) => (
           <div
             key={index}
-            className={cn(
-              "flex items-start gap-3 p-4 rounded-lg border",
-              item.color
-            )}
+            className="p-4 rounded-xl bg-[#faf8f5] border border-[#e5dcd0]"
           >
-            <div className="flex-shrink-0 mt-0.5">
-              {item.icon}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium mb-1">
-                {item.label}
-              </p>
-              <p className="text-2xl font-bold mb-1">
-                {item.value}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {item.description}
-              </p>
-            </div>
+            <p className="text-xs font-bold text-[#64748b] mb-1">{item.label}</p>
+            <p className={`text-2xl font-extrabold ${item.color} mb-1`}>
+              {item.value}
+            </p>
+            <p className="text-[11px] text-[#94a3b8] font-medium">{item.description}</p>
           </div>
         ))}
       </div>

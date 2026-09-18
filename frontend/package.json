@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "rm -rf .next && rm -rf node_modules/.cache && next dev",
     "build": "next build",
+    "build:clean": "rm -rf .next && rm -rf node_modules/.cache && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache"
   },
   "dependencies": {
     "clsx": "^2.1.0",

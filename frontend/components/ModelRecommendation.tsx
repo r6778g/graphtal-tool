@@ -74,45 +74,45 @@ export default function ModelRecommendation({
   }
 
   return (
-    <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-lg p-6 shadow-sm">
+    <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <Lightbulb className="w-5 h-5 text-primary" />
+          <Lightbulb className="w-5 h-5 text-[#d97706]" />
           <div>
-            <h3 className="text-lg font-semibold text-primary">Model Recommendation</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className="text-base font-extrabold text-[#1e293b]">Model Recommendation</h3>
+            <p className="text-xs text-[#64748b]">
               Based on your dataset analysis
             </p>
           </div>
         </div>
         {expanded ? (
-          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+          <ChevronUp className="w-5 h-5 text-[#64748b]" />
         ) : (
-          <ChevronDown className="w-5 h-5 text-muted-foreground" />
+          <ChevronDown className="w-5 h-5 text-[#64748b]" />
         )}
       </div>
 
       {expanded && (
         <div className="mt-4 space-y-4">
           {loading ? (
-            <div className="text-sm text-muted-foreground">Analyzing dataset...</div>
+            <div className="text-xs text-[#64748b]">Analyzing dataset...</div>
           ) : (
             <>
-              <div className="bg-background rounded-lg p-4 border">
+              <div className="bg-[#faf8f5] rounded-xl p-4 border border-[#e5dcd0]">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Recommended Model</p>
-                    <p className="text-xl font-bold text-primary capitalize">
+                    <p className="text-xs font-semibold text-[#64748b]">Recommended Model</p>
+                    <p className="text-lg font-extrabold text-[#b45309] capitalize">
                       {recommendation.recommended_model.replace('_', ' ')}
                     </p>
                   </div>
                   {currentModel !== recommendation.recommended_model && (
                     <button
                       onClick={() => onModelSelect?.(recommendation.recommended_model)}
-                      className="px-3 py-1 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/90 transition-colors"
+                      className="px-3 py-1.5 bg-[#1e293b] text-white text-xs font-bold rounded-lg hover:bg-[#0f172a] transition-colors cursor-pointer"
                     >
                       Use This Model
                     </button>

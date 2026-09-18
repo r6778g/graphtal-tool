@@ -90,8 +90,21 @@ def train_model(csv_path: str):
 
 
 if __name__ == "__main__":
-    csv_path = "sample_data.csv"
-    if not os.path.exists(csv_path):
-        print(f"Error: CSV file not found at {csv_path}")
+    possible_paths = [
+        "backend/sample_data.csv",
+        "sample_data.csv",
+        "Intraclone(RD).csv",
+        "../Intraclone(RD).csv"
+    ]
+    csv_path = None
+    for p in possible_paths:
+        if os.path.exists(p):
+            csv_path = p
+            break
+
+    if not csv_path:
+        print(f"Error: CSV file not found in paths: {possible_paths}")
     else:
+        print(f"Training models using dataset: {csv_path}")
         train_model(csv_path)
+

@@ -186,10 +186,10 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
   }
 
   return (
-    <div className="bg-card border rounded-lg p-6 shadow-sm">
+    <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
       <div className="flex items-center gap-2 mb-4">
-        <Upload className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-semibold">Upload Data File</h2>
+        <Upload className="w-5 h-5 text-[#d97706]" />
+        <h2 className="text-base font-extrabold text-[#1e293b]">Upload Data File</h2>
       </div>
 
       {!file ? (
@@ -197,8 +197,8 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           className={cn(
-            "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-            "hover:border-primary/50 hover:bg-primary/5",
+            "border-2 border-dashed border-[#d8cebf] bg-[#faf8f5] rounded-xl p-8 text-center cursor-pointer transition-all",
+            "hover:border-[#d97706] hover:bg-[#f2ebe2]",
             processing && "pointer-events-none opacity-50"
           )}
         >
