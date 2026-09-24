@@ -19,7 +19,7 @@ import ModelMetrics from '@/components/ModelMetrics'
 import ModelSelector from '@/components/ModelSelector'
 import ModelRecommendation from '@/components/ModelRecommendation'
 import { API_BASE_URL } from '@/lib/api'
-import { Loader2, ArrowLeft, Sparkles, TestTube } from 'lucide-react'
+import { Loader2, ArrowLeft, Sparkles, TestTube, Plus, FileText } from 'lucide-react'
 
 // Default formulation outputs
 const defaultFormulationOutputs = [
@@ -60,6 +60,12 @@ export default function FormulationPage() {
   const [selectedParameters, setSelectedParameters] = useState<string[]>([])
   const [metadata, setMetadata] = useState<any>(null)
   const [outputsList, setOutputsList] = useState<string[]>(defaultFormulationOutputs)
+  
+  // Multi-input form state
+  const [showMultiInput, setShowMultiInput] = useState(false)
+  const [multiInputRows, setMultiInputRows] = useState([
+    { oil: '', smix: '', water: '' }
+  ])
 
   useEffect(() => {
     // Load formulation metadata from backend
@@ -333,6 +339,41 @@ export default function FormulationPage() {
     setSelectedParameters([])
   }
 
+  // Multi-input form handlers
+  const addMultiInputRow = () => {
+    setMultiInputRows([...multiInputRows, { oil: '', smix: '', water: '' }])
+  }
+
+  const removeMultiInputRow = (index: number) => {
+    if (multiInputRows.length > 1) {
+      setMultiInputRows(multiInputRows.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateMultiInputRow = (index: number, field: 'oil' | 'smix' | 'water', value: string) => {
+    const updatedRows = [...multiInputRows]
+    updatedRows[index][field] = value
+    setMultiInputRows(updatedRows)
+  }
+
+  const handleCreateFileFromMultiInput = () => {
+    // Convert multi-input rows to file data format
+    const oilValues = multiInputRows.map(row => parseFloat(row.oil) || 0)
+    const smixValues = multiInputRows.map(row => parseFloat(row.smix) || 0)
+    const waterValues = multiInputRows.map(row => parseFloat(row.water) || 0)
+
+    const newFileData: Record<string, number[]> = {
+      'Oil': oilValues,
+      'Smix': smixValues,
+      'Water': waterValues
+    }
+
+    setFileData(newFileData)
+    setSelectedParameters(Object.keys(newFileData))
+    setShowMultiInput(false)
+    setMultiInputRows([{ oil: '', smix: '', water: '' }]) // Reset form
+  }
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#1e293b] font-sans selection:bg-[#d97706]/20">
       {/* Top Navigation Header */}
@@ -362,13 +403,20 @@ export default function FormulationPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowMultiInput(!showMultiInput)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#d97706]/40 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706]/20 transition-all cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Create Data File</span>
+            </button>
             {!fileData && (
               <button
                 onClick={handleLoadSampleData}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#d97706]/40 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706]/20 transition-all cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Load Sample Formulation Data</span>
+                <span>Load Sample Data</span>
               </button>
             )}
           </div>
@@ -378,6 +426,78 @@ export default function FormulationPage() {
       {/* Main Content Area */}
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6 max-w-7xl mx-auto">
+          
+          {/* Multi-Input Form (Collapsible) */}
+          {showMultiInput && (
+            <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#d97706]" />
+                  <h2 className="text-lg font-bold text-[#1e293b]">Create Formulation Data File</h2>
+                </div>
+                <button
+                  onClick={() => setShowMultiInput(false)}
+                  className="text-xs text-[#64748b] hover:text-[#1e293b]"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {multiInputRows.map((row, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <span className="text-xs font-semibold text-[#64748b] w-8">#{index + 1}</span>
+                    <input
+                      type="number"
+                      placeholder="Oil %"
+                      value={row.oil}
+                      onChange={(e) => updateMultiInputRow(index, 'oil', e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg border border-[#e8dfd3] bg-white text-[#1e293b] text-sm focus:outline-none focus:ring-2 focus:ring-[#d97706]/20 focus:border-[#d97706]"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Smix %"
+                      value={row.smix}
+                      onChange={(e) => updateMultiInputRow(index, 'smix', e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg border border-[#e8dfd3] bg-white text-[#1e293b] text-sm focus:outline-none focus:ring-2 focus:ring-[#d97706]/20 focus:border-[#d97706]"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Water %"
+                      value={row.water}
+                      onChange={(e) => updateMultiInputRow(index, 'water', e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg border border-[#e8dfd3] bg-white text-[#1e293b] text-sm focus:outline-none focus:ring-2 focus:ring-[#d97706]/20 focus:border-[#d97706]"
+                    />
+                    {multiInputRows.length > 1 && (
+                      <button
+                        onClick={() => removeMultiInputRow(index)}
+                        className="p-2 text-[#ef4444] hover:bg-[#fee2e2] rounded-lg transition-colors"
+                      >
+                        <Plus className="w-4 h-4 rotate-45" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={addMultiInputRow}
+                    className="px-4 py-2 bg-[#e8dfd3] hover:bg-[#e0d6c8] text-[#1e293b] font-semibold rounded-lg transition-colors flex items-center gap-2 text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Row
+                  </button>
+                  <button
+                    onClick={handleCreateFileFromMultiInput}
+                    className="px-4 py-2 bg-[#d97706] hover:bg-[#b45309] text-white font-semibold rounded-lg transition-colors text-sm"
+                  >
+                    Create & Apply Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* File Upload Component */}
           <FileUpload
             onDataLoaded={handleFileDataLoaded}
