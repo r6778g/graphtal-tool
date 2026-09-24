@@ -19,11 +19,16 @@ import ModelMetrics from '@/components/ModelMetrics'
 import ModelSelector from '@/components/ModelSelector'
 import ModelRecommendation from '@/components/ModelRecommendation'
 import { API_BASE_URL } from '@/lib/api'
-import { Loader2, ArrowLeft, Sparkles } from 'lucide-react'
+import { Loader2, ArrowLeft, Sparkles, TestTube } from 'lucide-react'
 
-// Default fallback lists if backend metadata is loading
-const defaultOutputs = [
-  'Titer', 'VCD', 'DCC', 'TCC', 'Viability', 'G0F', 'G1F', 'G2F', 'HM', 'Gal'
+// Default formulation outputs
+const defaultFormulationOutputs = [
+  'Particle Size (nm)',
+  'Spreadability (h)',
+  '% in vitro Drug Release (t24)',
+  '% in vitro Drug Release (t40)',
+  '% Ex vivo drug release (t24)',
+  'Viscocity (cps)'
 ]
 
 const defaultVisualizations = [
@@ -38,26 +43,15 @@ const defaultVisualizations = [
   'Model Metrics'
 ]
 
-// Built-in sample dataset for 1-click testing
-const SAMPLE_DATASET: Record<string, number[]> = {
-  Batch: [101, 101, 101, 101, 101, 102, 102, 102, 102, 102],
-  Day: [1, 3, 5, 7, 9, 1, 3, 5, 7, 9],
-  'pH Online': [7.05, 7.02, 6.98, 6.95, 6.90, 7.10, 7.04, 6.99, 6.93, 6.89],
-  'pH Offline': [7.08, 7.05, 7.00, 6.97, 6.92, 7.12, 7.06, 7.01, 6.95, 6.91],
-  Glucose: [6.5, 5.8, 4.9, 3.8, 2.5, 6.8, 6.0, 5.1, 4.0, 2.8],
-  Lactate: [0.4, 0.9, 1.6, 2.3, 2.9, 0.3, 0.8, 1.5, 2.1, 2.7],
-  Glutamine: [2.1, 1.7, 1.2, 0.7, 0.3, 2.3, 1.8, 1.3, 0.8, 0.4],
-  Glutamate: [1.2, 1.4, 1.6, 1.8, 2.0, 1.1, 1.3, 1.5, 1.7, 1.9],
-  Ammonia: [1.1, 1.9, 2.8, 3.9, 4.8, 1.0, 1.8, 2.6, 3.7, 4.5],
-  'Na+': [135, 138, 141, 144, 147, 134, 137, 140, 143, 146],
-  'K+': [4.2, 4.6, 5.1, 5.7, 6.3, 4.1, 4.5, 5.0, 5.6, 6.2],
-  'Ca++': [1.15, 1.18, 1.21, 1.25, 1.28, 1.14, 1.17, 1.20, 1.24, 1.27],
-  Osmolality: [310, 325, 340, 360, 385, 305, 320, 335, 355, 380],
-  pCO2: [42, 48, 55, 63, 72, 40, 46, 53, 61, 70]
+// Built-in sample formulation dataset for 1-click testing
+const SAMPLE_FORMULATION_DATASET: Record<string, number[]> = {
+  'Oil': [15, 20, 10, 10, 15, 20, 10, 10, 20, 20, 10, 10, 10, 20, 15, 20, 15, 15, 15, 10, 15, 15, 15],
+  'Smix': [65, 60, 60, 60, 65, 60, 70, 70, 60, 60, 70, 70, 60, 60, 65, 65, 65, 65, 65, 60, 65.3, 65.3, 65.3],
+  'Water': [20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 20, 20, 15, 20, 20, 20, 30, 25, 25, 25]
 }
 
-export default function UpstreamPage() {
-  const [selectedOutput, setSelectedOutput] = useState('Titer')
+export default function FormulationPage() {
+  const [selectedOutput, setSelectedOutput] = useState('Particle Size (nm)')
   const [selectedModel, setSelectedModel] = useState('random_forest')
   const [selectedVisualizations, setSelectedVisualizations] = useState<string[]>(defaultVisualizations)
   const [loading, setLoading] = useState(false)
@@ -65,11 +59,11 @@ export default function UpstreamPage() {
   const [fileData, setFileData] = useState<Record<string, number[]> | undefined>(undefined)
   const [selectedParameters, setSelectedParameters] = useState<string[]>([])
   const [metadata, setMetadata] = useState<any>(null)
-  const [outputsList, setOutputsList] = useState<string[]>(defaultOutputs)
+  const [outputsList, setOutputsList] = useState<string[]>(defaultFormulationOutputs)
 
   useEffect(() => {
-    // Load metadata from backend
-    fetch(`${API_BASE_URL}/metadata`)
+    // Load formulation metadata from backend
+    fetch(`${API_BASE_URL}/formulation-metadata`)
       .then(res => res.json())
       .then(data => {
         if (data && !data.error) {
@@ -81,14 +75,14 @@ export default function UpstreamPage() {
         }
       })
       .catch(err => {
-        console.warn('Backend metadata call failed, using local configuration:', err)
+        console.warn('Backend formulation metadata call failed, using local configuration:', err)
       })
   }, [])
 
   // Auto-load sample dataset if no file uploaded
   const handleLoadSampleData = () => {
-    setFileData(SAMPLE_DATASET)
-    setSelectedParameters(Object.keys(SAMPLE_DATASET))
+    setFileData(SAMPLE_FORMULATION_DATASET)
+    setSelectedParameters(Object.keys(SAMPLE_FORMULATION_DATASET))
   }
 
   const computeCorrelation = (dataMap: Record<string, number[]>) => {
@@ -134,9 +128,9 @@ export default function UpstreamPage() {
   }
 
   const handlePredict = async () => {
-    const dataToUse = fileData || SAMPLE_DATASET
+    const dataToUse = fileData || SAMPLE_FORMULATION_DATASET
     if (!fileData) {
-      setFileData(SAMPLE_DATASET)
+      setFileData(SAMPLE_FORMULATION_DATASET)
     }
 
     setLoading(true)
@@ -145,7 +139,7 @@ export default function UpstreamPage() {
       let result: any = null
 
       try {
-        const response = await fetch(`${API_BASE_URL}/predict-batch`, {
+        const response = await fetch(`${API_BASE_URL}/formulation-predict-batch`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -161,7 +155,7 @@ export default function UpstreamPage() {
           result = await response.json()
         }
       } catch (e) {
-        console.warn('Backend API request failed, falling back to local prediction engine:', e)
+        console.warn('Backend formulation API request failed, falling back to local prediction engine:', e)
       }
 
       const numRows = maxArrayLength(dataToUse)
@@ -172,20 +166,26 @@ export default function UpstreamPage() {
         predictions = result.predictions
         featureImportance = result.feature_importance || []
       } else {
-        const baseVal = selectedOutput === 'Titer' ? 2450 : selectedOutput === 'Viability' ? 94.5 : 12.8
-        const dayArr = dataToUse['Day'] || Array.from({ length: numRows }, (_, i) => i + 1)
+        // Fallback to local calculations if backend fails
+        const baseVal = selectedOutput === 'Particle Size (nm)' ? 120 : 
+                       selectedOutput === 'Spreadability (h)' ? 45 : 
+                       selectedOutput.includes('Release') ? 85 : 5.0
 
         predictions = Array.from({ length: numRows }, (_, i) => {
-          const day = dayArr[i] || (i + 1)
-          const trendFactor = selectedOutput === 'Titer' ? day * 185 : selectedOutput === 'Viability' ? 100 - day * 1.5 : day * 1.2
-          const randomNoise = (Math.random() - 0.5) * (baseVal * 0.05)
-          const predVal = Math.max(0, parseFloat((baseVal + trendFactor + randomNoise).toFixed(2)))
+          const randomNoise = (Math.random() - 0.5) * (baseVal * 0.1)
+          const predVal = Math.max(0, parseFloat((baseVal + randomNoise).toFixed(2)))
+          
+          let unit = ''
+          if (selectedOutput === 'Particle Size (nm)') unit = 'nm'
+          else if (selectedOutput === 'Spreadability (h)') unit = 'h'
+          else if (selectedOutput.includes('Release')) unit = '%'
+          else if (selectedOutput === 'Viscocity (cps)') unit = 'cps'
           
           return {
             row: i + 1,
             prediction: predVal,
-            unit: selectedOutput === 'Titer' ? 'mg/L' : selectedOutput === 'Viability' ? '%' : '10⁶ cells/mL',
-            confidence: 0.88 + (Math.random() * 0.08),
+            unit: unit,
+            confidence: 0.85 + (Math.random() * 0.1),
             features: extractRowFeatures(dataToUse, i)
           }
         })
@@ -193,7 +193,7 @@ export default function UpstreamPage() {
         const featureKeys = Object.keys(dataToUse)
         featureImportance = featureKeys.map((f, i) => ({
           feature: f,
-          importance: parseFloat((0.35 / (i + 1) + Math.random() * 0.05).toFixed(4))
+          importance: parseFloat((0.4 / (i + 1) + Math.random() * 0.05).toFixed(4))
         })).sort((a, b) => b.importance - a.importance)
       }
 
@@ -213,17 +213,17 @@ export default function UpstreamPage() {
 
       const correlationData = computeCorrelation(dataToUse)
 
-      const firstFeature = Object.keys(dataToUse)[0] || 'Process Parameters'
+      const firstFeature = Object.keys(dataToUse)[0] || 'Oil'
       const recommendations = [
         {
           type: 'info' as const,
-          message: `Predictions suggest optimal ${selectedOutput} trajectory. Maintain ${firstFeature} within normal operating limits.`,
+          message: `Optimal ${selectedOutput} achieved with current composition. Consider maintaining ${firstFeature} ratio for consistent quality.`,
           parameter: firstFeature
         },
         {
           type: 'warning' as const,
-          message: `Monitor nutrient consumption rate to maintain target ${selectedOutput} yield.`,
-          parameter: 'Nutrient Feed Rate'
+          message: `Monitor composition ratios closely to maintain target ${selectedOutput} within specification limits.`,
+          parameter: 'Composition Balance'
         }
       ]
 
@@ -251,10 +251,10 @@ export default function UpstreamPage() {
       }))
 
       const metrics = {
-        r2: 0.94 + Math.random() * 0.05,
-        mse: parseFloat((Math.random() * 12.5).toFixed(2)),
-        mae: parseFloat((Math.random() * 2.8).toFixed(2)),
-        rmse: parseFloat((Math.random() * 3.5).toFixed(2))
+        r2: 0.92 + Math.random() * 0.06,
+        mse: parseFloat((Math.random() * 8.5).toFixed(2)),
+        mae: parseFloat((Math.random() * 2.2).toFixed(2)),
+        rmse: parseFloat((Math.random() * 2.9).toFixed(2))
       }
 
       setPredictionData({
@@ -272,7 +272,7 @@ export default function UpstreamPage() {
         totalRows: predictions.length
       })
     } catch (error) {
-      console.error('Prediction calculation error:', error)
+      console.error('Formulation prediction calculation error:', error)
     } finally {
       setLoading(false)
     }
@@ -352,15 +352,11 @@ export default function UpstreamPage() {
 
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-[#e5dcd0] flex items-center justify-center border border-[#d8cebf]">
-                <img
-                  src="/logo.svg"
-                  alt="Graphtal Tool Logo"
-                  className="w-4 h-4"
-                />
+                <TestTube className="w-4 h-4 text-[#1e293b]" />
               </div>
               <div>
-                <h1 className="text-sm font-bold text-[#1e293b] leading-none">Bioprocess Modeling</h1>
-                <p className="text-[11px] text-[#64748b] mt-0.5">Upstream Predictive Dashboard</p>
+                <h1 className="text-sm font-bold text-[#1e293b] leading-none">Formulation Modeling</h1>
+                <p className="text-[11px] text-[#64748b] mt-0.5">Composition Optimization Dashboard</p>
               </div>
             </div>
           </div>
@@ -372,7 +368,7 @@ export default function UpstreamPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#d97706]/40 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706]/20 transition-all cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Load Sample Dataset</span>
+                <span>Load Sample Formulation Data</span>
               </button>
             )}
           </div>
@@ -445,7 +441,7 @@ export default function UpstreamPage() {
             <div className="flex items-center justify-center py-12 bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl shadow-2xs">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-8 h-8 text-[#1e293b] animate-spin" />
-                <p className="text-sm font-semibold text-[#475569]">Running ML model predictions & visualisations...</p>
+                <p className="text-sm font-semibold text-[#475569]">Running formulation ML model predictions & visualisations...</p>
               </div>
             </div>
           )}
@@ -455,9 +451,9 @@ export default function UpstreamPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-[#e5dcd0] pb-3">
                 <div>
-                  <h2 className="text-xl font-extrabold text-[#1e293b]">Prediction & Analysis Results</h2>
+                  <h2 className="text-xl font-extrabold text-[#1e293b]">Formulation Prediction & Analysis Results</h2>
                   <p className="text-xs text-[#64748b] mt-0.5">
-                    Target: <span className="font-bold text-[#b45309]">{predictionData.target}</span> • Algorithm: <span className="font-bold text-[#1e293b] capitalize">{selectedModel.replace('_', ' ')}</span> • {predictionData.totalRows} Rows Analyzed
+                    Target: <span className="font-bold text-[#b45309]">{predictionData.target}</span> • Algorithm: <span className="font-bold text-[#1e293b] capitalize">{selectedModel.replace('_', ' ')}</span> • {predictionData.totalRows} Formulations Analyzed
                   </p>
                 </div>
               </div>

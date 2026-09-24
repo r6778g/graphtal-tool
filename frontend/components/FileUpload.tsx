@@ -8,17 +8,21 @@ import * as XLSX from 'xlsx'
 
 interface FileUploadProps {
   onDataLoaded: (data: Record<string, number[]>) => void
-  onParametersSelected?: (parameters: string[]) => void
+  onColumnsDetected?: (columns: string[]) => void
   loading?: boolean
+  fileData?: Record<string, number[]>
 }
 
-export default function FileUpload({ onDataLoaded, onParametersSelected, loading }: FileUploadProps) {
+export default function FileUpload({ onDataLoaded, onColumnsDetected, loading, fileData }: FileUploadProps) {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [detectedColumns, setDetectedColumns] = useState<string[]>([])
-  const [selectedParameters, setSelectedParameters] = useState<Set<string>>(new Set())
+  const [parsedData, setParsedData] = useState<Record<string, number[]> | null>(null)
+  
+  // Use fileData from props if available, otherwise use internally parsed data
+  const displayData = fileData || parsedData
 
   const processCSV = useCallback((file: File) => {
     return new Promise<Record<string, number[]>>((resolve, reject) => {
@@ -108,15 +112,15 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
     }
     
     try {
-      let parsedData: Record<string, number[]>
+      let processedData: Record<string, number[]>
       
       if (fileExtension === 'csv') {
-        parsedData = await processCSV(selectedFile)
+        processedData = await processCSV(selectedFile)
       } else {
-        parsedData = await processExcel(selectedFile)
+        processedData = await processExcel(selectedFile)
       }
       
-      if (Object.keys(parsedData).length === 0) {
+      if (Object.keys(processedData).length === 0) {
         setError('No valid numeric data found in the file')
         setProcessing(false)
         return
@@ -124,10 +128,11 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
       
       setFile(selectedFile)
       setSuccess(true)
-      const columns = Object.keys(parsedData)
+      const columns = Object.keys(processedData)
       setDetectedColumns(columns)
-      setSelectedParameters(new Set(columns))
-      onDataLoaded(parsedData)
+      setParsedData(processedData)
+      onColumnsDetected?.(columns)
+      onDataLoaded(processedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to process file')
     } finally {
@@ -159,37 +164,15 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
     setError(null)
     setSuccess(false)
     setDetectedColumns([])
-    setSelectedParameters(new Set())
-  }
-
-  const toggleParameter = (parameter: string) => {
-    setSelectedParameters(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(parameter)) {
-        newSet.delete(parameter)
-      } else {
-        newSet.add(parameter)
-      }
-      onParametersSelected?.(Array.from(newSet))
-      return newSet
-    })
-  }
-
-  const selectAllParameters = () => {
-    setSelectedParameters(new Set(detectedColumns))
-    onParametersSelected?.(detectedColumns)
-  }
-
-  const deselectAllParameters = () => {
-    setSelectedParameters(new Set())
-    onParametersSelected?.([])
+    setParsedData(null)
+    onColumnsDetected?.([])
   }
 
   return (
-    <div className="bg-[#f4efe8] border border-[#e8dfd3] rounded-2xl p-6 shadow-2xs">
+    <div className="bg-orange-50 border border-orange-200 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <Upload className="w-5 h-5 text-[#d97706]" />
-        <h2 className="text-base font-extrabold text-[#1e293b]">Upload Data File</h2>
+        <Upload className="w-5 h-5 text-orange-600" />
+        <h2 className="text-base font-extrabold text-orange-900">Upload Data File</h2>
       </div>
 
       {!file ? (
@@ -197,8 +180,8 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           className={cn(
-            "border-2 border-dashed border-[#d8cebf] bg-[#faf8f5] rounded-xl p-8 text-center cursor-pointer transition-all",
-            "hover:border-[#d97706] hover:bg-[#f2ebe2]",
+            "border-2 border-dashed border-orange-300 bg-orange-100/50 rounded-xl p-8 text-center cursor-pointer transition-all",
+            "hover:border-orange-500 hover:bg-orange-100",
             processing && "pointer-events-none opacity-50"
           )}
         >
@@ -214,12 +197,12 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
             htmlFor="file-upload"
             className="flex flex-col items-center gap-3 cursor-pointer"
           >
-            <FileText className="w-12 h-12 text-muted-foreground" />
+            <FileText className="w-12 h-12 text-orange-400" />
             <div>
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium text-orange-800">
                 {processing ? 'Processing file...' : 'Click to upload or drag and drop'}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-orange-600 mt-1">
                 CSV or Excel files (.csv, .xls, .xlsx)
               </p>
             </div>
@@ -227,12 +210,12 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-secondary rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-orange-100 rounded-lg">
             <div className="flex items-center gap-3">
-              <FileText className="w-8 h-8 text-primary" />
+              <FileText className="w-8 h-8 text-orange-600" />
               <div>
-                <p className="text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-orange-900">{file.name}</p>
+                <p className="text-xs text-orange-600">
                   {(file.size / 1024).toFixed(2)} KB
                 </p>
               </div>
@@ -241,7 +224,7 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
               onClick={clearFile}
               disabled={loading}
               className={cn(
-                "p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive",
+                "p-2 rounded-md hover:bg-orange-200 text-orange-400 hover:text-orange-700",
                 "transition-colors",
                 loading && "opacity-50 cursor-not-allowed"
               )}
@@ -251,55 +234,14 @@ export default function FileUpload({ onDataLoaded, onParametersSelected, loading
           </div>
 
           {success && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                <CheckCircle className="w-4 h-4" />
-                <span>File processed successfully</span>
-              </div>
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium">Select Input Parameters ({selectedParameters.size}/{detectedColumns.length}):</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={selectAllParameters}
-                      disabled={loading}
-                      className="text-xs px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors disabled:opacity-50"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={deselectAllParameters}
-                      disabled={loading}
-                      className="text-xs px-2 py-1 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded transition-colors disabled:opacity-50"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {detectedColumns.map((column) => (
-                    <button
-                      key={column}
-                      onClick={() => toggleParameter(column)}
-                      disabled={loading}
-                      className={cn(
-                        "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
-                        selectedParameters.has(column)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20",
-                        loading && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {column}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="flex items-center gap-2 text-sm text-orange-600">
+              <CheckCircle className="w-4 h-4" />
+              <span>File processed successfully - {detectedColumns.length} columns detected</span>
             </div>
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-destructive">
+            <div className="flex items-center gap-2 text-sm text-red-600">
               <AlertCircle className="w-4 h-4" />
               <span>{error}</span>
             </div>

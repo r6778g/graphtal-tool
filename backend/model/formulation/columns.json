@@ -1,0 +1,33 @@
+{
+  "inputs": [
+    "Oil",
+    "Smix",
+    "Water"
+  ],
+  "outputs": [
+    "Particle Size (nm)",
+    "Spreadability (h)",
+    "% in vitro Drug Release (t24)",
+    "% in vitro Drug Release (t40)",
+    "% Ex vivo drug release (t24)",
+    "Viscocity (cps)"
+  ],
+  "model_types": [
+    "ridge",
+    "lasso",
+    "svm",
+    "random_forest"
+  ],
+  "visualizations": [
+    "Prediction Card",
+    "Trend",
+    "Feature Importance",
+    "Correlation",
+    "Actual vs Predicted",
+    "Recommendation",
+    "Distribution Histogram",
+    "Residual Plot",
+    "Model Metrics"
+  ],
+  "data_type": "formulation"
+}

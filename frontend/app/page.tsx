@@ -32,7 +32,7 @@ export default function Home() {
       title: 'Formulation',
       description: 'Formulation & fill-finish analytics',
       icon: TestTube,
-      href: '/upstream'
+      href: '/formulation'
     },
     // Row 2
     {
