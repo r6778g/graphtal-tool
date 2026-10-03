@@ -14,11 +14,13 @@ const nextConfig = {
     
     return config
   },
-  // Disable experimental features that might cause caching issues
+  // Add experimental features for Next.js 16 compatibility
   experimental: {
     // Optimize for development stability
     optimizePackageImports: ['lucide-react'],
   },
+  // Allow webpack to work with Next.js 16
+  turbopack: {},
 }
 
 module.exports = nextConfig

@@ -31,6 +31,13 @@ const defaultFormulationOutputs = [
   'Viscocity (cps)'
 ]
 
+const defaultSelectedFormulationOutput = '% Ex vivo drug release (t24)'
+
+const getDefaultFormulationOutput = (outputs: string[]) =>
+  outputs.includes(defaultSelectedFormulationOutput)
+    ? defaultSelectedFormulationOutput
+    : outputs[0] || defaultFormulationOutputs[0]
+
 const defaultVisualizations = [
   'Prediction Card',
   'Trend',
@@ -51,7 +58,7 @@ const SAMPLE_FORMULATION_DATASET: Record<string, number[]> = {
 }
 
 export default function FormulationPage() {
-  const [selectedOutput, setSelectedOutput] = useState('Particle Size (nm)')
+  const [selectedOutput, setSelectedOutput] = useState(defaultSelectedFormulationOutput)
   const [selectedModel, setSelectedModel] = useState('random_forest')
   const [selectedVisualizations, setSelectedVisualizations] = useState<string[]>(defaultVisualizations)
   const [loading, setLoading] = useState(false)
@@ -75,8 +82,9 @@ export default function FormulationPage() {
         if (data && !data.error) {
           setMetadata(data)
           if (data.outputs && data.outputs.length > 0) {
+            const nextDefaultOutput = getDefaultFormulationOutput(data.outputs)
             setOutputsList(data.outputs)
-            setSelectedOutput(data.outputs[0])
+            setSelectedOutput(nextDefaultOutput)
           }
         }
       })

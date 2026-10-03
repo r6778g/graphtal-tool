@@ -26,7 +26,7 @@ export default function OutputSelector({ outputs, selected, onSelect, disabled }
               onClick={() => onSelect(output)}
               disabled={disabled}
               className={cn(
-                "px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-center truncate cursor-pointer",
+                "px-3.5 py-2.5 rounded-xl text-[13px] md:text-sm font-bold transition-all text-center cursor-pointer leading-tight whitespace-normal break-words flex items-center justify-center min-h-[60px]",
                 "border",
                 selected === output
                   ? "border-[#d97706] bg-[#d97706]/15 text-[#b45309] shadow-xs"
