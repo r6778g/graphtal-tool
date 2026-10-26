@@ -15,10 +15,11 @@ A modern, dynamic Next.js frontend for the Intraclone ML Prediction Demo.
   - Rule-based Recommendations
 - **Modern UI**: Built with Tailwind CSS, featuring a clean, professional design
 - **Responsive**: Works seamlessly on desktop and mobile devices
+- **Model Management**: Supabase-authenticated dataset uploads, background training status, candidate evaluation, and administrator promotion/rollback
 
 ## Tech Stack
 
-- **Next.js 14**: React framework with App Router
+- **Next.js 16**: React framework with App Router
 - **TypeScript**: Type-safe development
 - **Tailwind CSS**: Utility-first styling
 - **Recharts**: Data visualization library
@@ -43,7 +44,15 @@ cd frontend
 npm install
 ```
 
-3. Run the development server:
+3. Configure the backend and Supabase public client values:
+```bash
+cp .env.example .env.local
+```
+
+Set `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`.
+
+4. Run the development server:
 ```bash
 npm run dev
 ```
@@ -127,11 +136,19 @@ npm run build
 npm start
 ```
 
+## Model Management
+
+Open `/models` and sign in with a provisioned Supabase account. Users can upload
+validated Upstream or Formulation datasets and monitor candidate training;
+promotion, rollback, and forced API refresh require an administrator role in
+Supabase `app_metadata`. The frontend never receives artifact-storage
+credentials. See [the backend registry guide](../backend/MODEL_REGISTRY.md) for
+database migrations, Render worker setup, required backend environment
+variables, local synchronization, and rollback procedures.
+
 ## Future Enhancements
 
-- Connect to real FastAPI backend
+- Add time-aware or experiment-aware model evaluation splits
 - Add SHAP explanations for model interpretability
-- Implement user authentication
 - Add batch comparison features
 - Export reports as PDF
-- Add model retraining interface

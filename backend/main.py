@@ -1,10 +1,389 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import numpy as np
 import predict
 import predict_formulation
+import model_registry as registry
+import os
+from uuid import UUID, uuid4
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+app.config["MAX_CONTENT_LENGTH"] = registry.ARTIFACT_MAX_BYTES
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://graphtal-tool.vercel.app,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+]
+CORS(app, resources={r"/*": {"origins": allowed_origins}})
+
+
+def _identity_or_response():
+    try:
+        return registry.authenticate(), None
+    except PermissionError as exc:
+        return None, (jsonify({"error": str(exc)}), 401)
+    except RuntimeError as exc:
+        return None, (jsonify({"error": str(exc)}), 503)
+
+
+def _registry_error(exc):
+    if isinstance(exc, PermissionError):
+        return jsonify({"error": str(exc)}), 403
+    if isinstance(exc, LookupError):
+        return jsonify({"error": str(exc)}), 404
+    if isinstance(exc, ValueError):
+        return jsonify({"error": str(exc)}), 400
+    app.logger.exception("Model registry operation failed", exc_info=exc)
+    return jsonify({"error": "Model registry operation failed"}), 503
+
+
+@app.errorhandler(413)
+def upload_too_large(_error):
+    return jsonify({"error": "Upload exceeds the 100 MB limit"}), 413
+
+
+@app.route("/api/datasets/upload", methods=["POST"])
+def upload_dataset():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    upload = request.files.get("file")
+    module = request.form.get("module", "")
+    if not upload or not upload.filename:
+        return jsonify({"error": "A CSV or Excel file is required"}), 400
+    if module not in registry.SUPPORTED_MODULES:
+        return jsonify({"error": "module must be upstream or formulation"}), 400
+
+    extension = upload.filename.rsplit(".", 1)[-1].lower()
+    if extension not in {"csv", "xls", "xlsx"}:
+        return jsonify({"error": "Only CSV, XLS, and XLSX files are supported"}), 400
+    raw = upload.read(registry.ARTIFACT_MAX_BYTES + 1)
+    if not raw or len(raw) > registry.ARTIFACT_MAX_BYTES:
+        return jsonify({"error": "Dataset is empty or exceeds the 100 MB limit"}), 400
+
+    try:
+        import csv
+        import io
+        import zipfile
+        import pandas as pd
+
+        max_rows = max(8, int(os.getenv("MAX_TRAINING_ROWS", "100000")))
+        try:
+            if extension == "csv":
+                with io.TextIOWrapper(
+                    io.BytesIO(raw), encoding="utf-8-sig", newline=""
+                ) as csv_file:
+                    reader = csv.reader(csv_file, strict=True)
+                    next(reader, None)
+                    for row_count, _row in enumerate(reader, start=1):
+                        if row_count > max_rows:
+                            return jsonify({
+                                "error": f"Dataset exceeds the {max_rows} row training limit"
+                            }), 413
+                frame = pd.read_csv(io.BytesIO(raw), nrows=max_rows + 1)
+            else:
+                if extension == "xlsx":
+                    with zipfile.ZipFile(io.BytesIO(raw)) as workbook:
+                        expanded_size = sum(
+                            item.file_size for item in workbook.infolist()
+                        )
+                    max_expanded_size = int(os.getenv(
+                        "MAX_EXCEL_UNCOMPRESSED_BYTES", str(256 * 1024 * 1024)
+                    ))
+                    if expanded_size > max_expanded_size:
+                        return jsonify({
+                            "error": "Expanded Excel workbook exceeds the configured size limit"
+                        }), 413
+                frame = pd.read_excel(
+                    io.BytesIO(raw), engine="xlrd" if extension == "xls" else "openpyxl"
+                )
+        except Exception:
+            return jsonify({"error": "Unable to parse the uploaded CSV or Excel file"}), 400
+        data_format = extension
+        if len(frame) > max_rows:
+            return jsonify({"error": f"Dataset exceeds the {max_rows} row training limit"}), 413
+        schema = registry.expected_schema(module)
+        required_columns = schema["inputs"] + schema["outputs"]
+        missing = [column for column in required_columns if column not in frame.columns]
+        if missing:
+            return jsonify({"error": "Missing required columns", "columns": missing}), 400
+        normalized = frame[required_columns].copy()
+        for column in required_columns:
+            converted = pd.to_numeric(normalized[column], errors="coerce")
+            invalid = converted.isna() & normalized[column].notna()
+            if invalid.any() or converted.isna().any() or not np.isfinite(converted).all():
+                return jsonify({
+                    "error": "Required columns must contain complete numeric values",
+                    "column": column,
+                }), 400
+            normalized[column] = converted
+        duplicate_rows = int(normalized.duplicated().sum())
+        normalized = normalized.drop_duplicates()
+        if normalized.empty:
+            return jsonify({"error": "Dataset has no complete unique records"}), 400
+        dataset = registry.store_dataset(
+            identity.user_id, identity.tenant_id, module, raw, len(normalized),
+            list(frame.columns), upload.filename, data_format,
+        )
+        return jsonify({
+            "dataset": registry.serialize_row(dataset),
+            "duplicate_rows_removed": duplicate_rows,
+            "validated_rows": len(normalized),
+        }), 201
+    except (ValueError, RuntimeError) as exc:
+        return _registry_error(exc)
+    except Exception:
+        app.logger.exception("Dataset upload failed")
+        return jsonify({"error": "Dataset could not be persisted"}), 503
+
+
+@app.route("/api/training/jobs", methods=["POST"])
+def submit_training_job():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    payload = request.get_json(silent=True) or {}
+    try:
+        dataset_id = UUID(str(payload.get("dataset_id", "")))
+    except ValueError:
+        return jsonify({"error": "dataset_id must be a UUID"}), 400
+    job_id = uuid4()
+    idempotency_key = request.headers.get("Idempotency-Key") or payload.get("idempotency_key")
+    if idempotency_key is None:
+        return jsonify({"error": "Idempotency-Key is required"}), 400
+    if (
+        not isinstance(idempotency_key, str) or len(idempotency_key) > 200
+    ):
+        return jsonify({"error": "Idempotency-Key must be at most 200 characters"}), 400
+    try:
+        job = registry.create_training_job(
+            job_id=job_id, identity=identity, module=payload.get("module", ""),
+            dataset_id=dataset_id, idempotency_key=idempotency_key,
+        )
+        if job.get("created"):
+            from model_worker import Retry, training_queue
+            try:
+                training_queue().enqueue(
+                    "model_worker.run_training_job", str(job["id"]),
+                    job_id=str(job["id"]),
+                    job_timeout=int(os.getenv("TRAINING_TIMEOUT_SECONDS", "1800")),
+                    retry=Retry(max=2),
+                )
+            except Exception as queue_error:
+                with registry.connect() as connection:
+                    connection.execute(
+                        "UPDATE training_jobs SET status = 'failed', progress = 100, "
+                        "message = %s, updated_at = now() WHERE id = %s",
+                        (f"Unable to queue training job: {queue_error}"[:500], job["id"]),
+                    )
+                return jsonify({"error": "Training queue is unavailable"}), 503
+        return jsonify({"job": registry.serialize_row(job)}), 202
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/training/jobs")
+def list_training_jobs():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        with registry.connect() as connection:
+            rows = connection.execute(
+                "SELECT id, module, dataset_id, status, progress, message, "
+                "candidate_ids, created_at, updated_at FROM training_jobs "
+                "WHERE owner_id = %s ORDER BY created_at DESC LIMIT 100",
+                (identity.user_id,),
+            ).fetchall()
+        return jsonify({"jobs": registry.serialize_row(rows)})
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/training/jobs/<job_id>")
+def get_training_job(job_id):
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        parsed_id = UUID(job_id)
+    except ValueError:
+        return jsonify({"error": "job_id must be a UUID"}), 400
+    try:
+        with registry.connect() as connection:
+            row = connection.execute(
+                "SELECT id, module, dataset_id, status, progress, message, "
+                "candidate_ids, created_at, updated_at FROM training_jobs "
+                "WHERE id = %s AND owner_id = %s",
+                (parsed_id, identity.user_id),
+            ).fetchone()
+        if not row:
+            return jsonify({"error": "Training job not found"}), 404
+        return jsonify({"job": registry.serialize_row(row)})
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/training/jobs/<job_id>/retry", methods=["POST"])
+def retry_training_job(job_id):
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        parsed_id = UUID(job_id)
+    except ValueError:
+        return jsonify({"error": "job_id must be a UUID"}), 400
+    try:
+        with registry.connect() as connection:
+            row = connection.execute(
+                "UPDATE training_jobs SET status = 'queued', progress = 0, "
+                "message = 'Retry queued', updated_at = now() "
+                "WHERE id = %s AND owner_id = %s AND status = 'failed' "
+                "RETURNING id",
+                (parsed_id, identity.user_id),
+            ).fetchone()
+        if not row:
+            return jsonify({"error": "Failed training job not found"}), 404
+        from model_worker import Retry, training_queue
+        training_queue().enqueue(
+            "model_worker.run_training_job", str(parsed_id), job_id=str(uuid4()),
+            job_timeout=int(os.getenv("TRAINING_TIMEOUT_SECONDS", "1800")),
+            retry=Retry(max=2),
+        )
+        return jsonify({"job_id": str(parsed_id), "status": "queued"}), 202
+    except Exception as exc:
+        try:
+            with registry.connect() as connection:
+                connection.execute(
+                    "UPDATE training_jobs SET status = 'failed', progress = 100, "
+                    "message = 'Unable to queue retry', updated_at = now() WHERE id = %s",
+                    (UUID(job_id),),
+                )
+        except Exception:
+            app.logger.exception("Could not record training retry enqueue failure")
+        return _registry_error(exc)
+
+
+@app.route("/api/models")
+def get_models():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    module = request.args.get("module")
+    if module and module not in registry.SUPPORTED_MODULES:
+        return jsonify({"error": "module must be upstream or formulation"}), 400
+    try:
+        return jsonify({"models": registry.serialize_row(
+            registry.list_models(identity, module)
+        )})
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/models/active")
+def get_active_models():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    module = request.args.get("module")
+    if module and module not in registry.SUPPORTED_MODULES:
+        return jsonify({"error": "module must be upstream or formulation"}), 400
+    try:
+        query = (
+            "SELECT m.id, m.module, m.target, m.algorithm, m.version, "
+            "d.version AS dataset_version, m.metrics, "
+            "m.activated_at FROM active_models a JOIN model_versions m ON m.id = a.model_id "
+            "JOIN datasets d ON d.id = m.dataset_id "
+            "WHERE (%s::text IS NULL OR m.module = %s) "
+            "ORDER BY m.module, m.target, m.algorithm"
+        )
+        with registry.connect() as connection:
+            rows = connection.execute(query, (module, module)).fetchall()
+        return jsonify({"models": registry.serialize_row(rows)})
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/models/<model_id>")
+def get_model(model_id):
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        parsed_id = UUID(model_id)
+        with registry.connect() as connection:
+            row = connection.execute(
+                "SELECT m.id, m.module, m.target, m.algorithm, m.version, m.dataset_id, "
+                "d.version AS dataset_version, m.metrics, m.status, m.created_at, "
+                "m.approved_at, m.activated_at FROM model_versions m "
+                "JOIN datasets d ON d.id = m.dataset_id "
+                "WHERE m.id = %s AND m.tenant_id = %s",
+                (parsed_id, identity.tenant_id),
+            ).fetchone()
+        if not row:
+            return jsonify({"error": "Model version not found"}), 404
+        return jsonify({"model": registry.serialize_row(row)})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/models/<model_id>/promote", methods=["POST"])
+def promote_model(model_id):
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        result = registry.approve_and_promote(UUID(model_id), identity)
+        refresh = {
+            "upstream": predict.predictor.refresh_active(force=True),
+            "formulation": predict_formulation.formulation_predictor.refresh_active(force=True),
+        }
+        return jsonify({
+            "model": registry.serialize_row(result), "status": "active", "refresh": refresh
+        })
+    except ValueError as exc:
+        return _registry_error(exc)
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/models/<model_id>/rollback", methods=["POST"])
+def rollback_model(model_id):
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    try:
+        result = registry.rollback_model(UUID(model_id), identity)
+        refresh = {
+            "upstream": predict.predictor.refresh_active(force=True),
+            "formulation": predict_formulation.formulation_predictor.refresh_active(force=True),
+        }
+        return jsonify({
+            "model": registry.serialize_row(result), "status": "active", "refresh": refresh
+        })
+    except Exception as exc:
+        return _registry_error(exc)
+
+
+@app.route("/api/models/refresh", methods=["POST"])
+def refresh_models():
+    identity, error = _identity_or_response()
+    if error:
+        return error
+    if not identity.is_admin:
+        return jsonify({"error": "Administrator role is required"}), 403
+    try:
+        return jsonify({
+            "upstream": predict.predictor.refresh_active(force=True),
+            "formulation": predict_formulation.formulation_predictor.refresh_active(force=True),
+        })
+    except Exception as exc:
+        return _registry_error(exc)
 
 
 @app.route("/")
@@ -183,108 +562,9 @@ def recommend_model():
 
 @app.route("/retrain", methods=["POST"])
 def retrain_models():
-    """Retrain all models with new data combined with existing training data."""
-    try:
-        import train
-        import pandas as pd
-        import os
-        from datetime import datetime
-        
-        data = request.get_json()
-        file_data = data.get("file_data", {})
-        mode = data.get("mode", "append")  # 'append' or 'replace'
-        
-        if not file_data:
-            return jsonify({"error": "No training data provided"}), 400
-        
-        # Convert file_data to DataFrame
-        new_df = pd.DataFrame(file_data)
-        
-        # Create training_data directory if it doesn't exist
-        training_dir = "training_data"
-        os.makedirs(training_dir, exist_ok=True)
-        
-        # Save new data with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_data_path = os.path.join(training_dir, f"training_data_{timestamp}.csv")
-        new_df.to_csv(new_data_path, index=False)
-        
-        # Determine which data to use for training
-        if mode == "replace":
-            # Use only the new data
-            training_df = new_df
-        else:
-            # Append mode: combine with existing data
-            existing_data_files = []
-            
-            # Check for existing training data files
-            if os.path.exists(training_dir):
-                existing_data_files = [
-                    os.path.join(training_dir, f) 
-                    for f in os.listdir(training_dir) 
-                    if f.endswith('.csv')
-                ]
-            
-            # Also check for original sample_data.csv
-            if os.path.exists("sample_data.csv"):
-                existing_data_files.append("sample_data.csv")
-            
-            # Load and combine all existing data
-            all_dfs = [new_df]
-            for file_path in existing_data_files:
-                if file_path != new_data_path:  # Don't load the file we just saved
-                    try:
-                        existing_df = pd.read_csv(file_path)
-                        all_dfs.append(existing_df)
-                    except Exception as e:
-                        print(f"Warning: Could not load {file_path}: {e}")
-            
-            # Combine all dataframes
-            if len(all_dfs) > 1:
-                training_df = pd.concat(all_dfs, ignore_index=True)
-                # Remove duplicates if any
-                training_df = training_df.drop_duplicates()
-            else:
-                training_df = new_df
-        
-        # Save combined training data
-        combined_path = os.path.join(training_dir, "combined_training_data.csv")
-        training_df.to_csv(combined_path, index=False)
-        
-        # Retrain models using the combined data
-        print(f"Retraining models with {len(training_df)} total samples...")
-        train.train_model(combined_path)
-        
-        # Reload predictor with new models
-        predict.predictor.load_models()
-        
-        # Save training metadata
-        metadata = {
-            "last_trained": timestamp,
-            "total_samples": len(training_df),
-            "new_samples": len(new_df),
-            "mode": mode,
-            "columns": list(training_df.columns)
-        }
-        
-        import json
-        metadata_path = os.path.join("model", "training_metadata.json")
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        
-        return jsonify({
-            "message": "Models retrained successfully",
-            "total_samples": len(training_df),
-            "new_samples": len(new_df),
-            "timestamp": timestamp,
-            "mode": mode
-        })
-        
-    except Exception as e:
-        print(f"Error during retraining: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "error": "Synchronous in-place retraining is disabled. Upload a dataset and submit /api/training/jobs."
+    }), 410
 
 
 @app.route("/training-status")
@@ -448,111 +728,9 @@ def get_formulation_feature_importance(target):
 
 @app.route("/formulation-retrain", methods=["POST"])
 def retrain_formulation_models():
-    """Retrain all formulation models with new data combined with existing training data."""
-    try:
-        import train_formulation
-        import pandas as pd
-        import os
-        from datetime import datetime
-        
-        data = request.get_json()
-        file_data = data.get("file_data", {})
-        mode = data.get("mode", "append")  # 'append' or 'replace'
-        
-        if not file_data:
-            return jsonify({"error": "No training data provided"}), 400
-        
-        # Convert file_data to DataFrame
-        new_df = pd.DataFrame(file_data)
-        
-        # Create formulation training data directory if it doesn't exist
-        formulation_training_dir = "formulation_training_data"
-        os.makedirs(formulation_training_dir, exist_ok=True)
-        
-        # Save new data with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_data_path = os.path.join(formulation_training_dir, f"formulation_training_data_{timestamp}.csv")
-        new_df.to_csv(new_data_path, index=False)
-        
-        # Determine which data to use for training
-        if mode == "replace":
-            # Use only the new data
-            training_df = new_df
-        else:
-            # Append mode: combine with existing data
-            existing_data_files = []
-            
-            # Check for existing formulation training data files
-            if os.path.exists(formulation_training_dir):
-                existing_data_files = [
-                    os.path.join(formulation_training_dir, f) 
-                    for f in os.listdir(formulation_training_dir) 
-                    if f.endswith('.csv')
-                ]
-            
-            # Also check for original formulation_data.csv
-            if os.path.exists("formulation_data.csv"):
-                existing_data_files.append("formulation_data.csv")
-            elif os.path.exists("backend/formulation_data.csv"):
-                existing_data_files.append("backend/formulation_data.csv")
-            
-            # Load and combine all existing data
-            all_dfs = [new_df]
-            for file_path in existing_data_files:
-                if file_path != new_data_path:  # Don't load the file we just saved
-                    try:
-                        existing_df = pd.read_csv(file_path)
-                        all_dfs.append(existing_df)
-                    except Exception as e:
-                        print(f"Warning: Could not load {file_path}: {e}")
-            
-            # Combine all dataframes
-            if len(all_dfs) > 1:
-                training_df = pd.concat(all_dfs, ignore_index=True)
-                # Remove duplicates if any
-                training_df = training_df.drop_duplicates()
-            else:
-                training_df = new_df
-        
-        # Save combined training data
-        combined_path = os.path.join(formulation_training_dir, "combined_formulation_training_data.csv")
-        training_df.to_csv(combined_path, index=False)
-        
-        # Retrain formulation models using the combined data
-        print(f"Retraining formulation models with {len(training_df)} total samples...")
-        train_formulation.train_formulation_model(combined_path)
-        
-        # Reload predictor with new models
-        predict_formulation.formulation_predictor.load_models()
-        
-        # Save training metadata
-        metadata = {
-            "last_trained": timestamp,
-            "total_samples": len(training_df),
-            "new_samples": len(new_df),
-            "mode": mode,
-            "columns": list(training_df.columns)
-        }
-        
-        import json
-        formulation_metadata_path = os.path.join("model", "formulation", "training_metadata.json")
-        os.makedirs(os.path.dirname(formulation_metadata_path), exist_ok=True)
-        with open(formulation_metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        
-        return jsonify({
-            "message": "Formulation models retrained successfully",
-            "total_samples": len(training_df),
-            "new_samples": len(new_df),
-            "timestamp": timestamp,
-            "mode": mode
-        })
-        
-    except Exception as e:
-        print(f"Error during formulation retraining: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "error": "Synchronous in-place retraining is disabled. Upload a dataset and submit /api/training/jobs."
+    }), 410
 
 
 @app.route("/formulation-training-status")

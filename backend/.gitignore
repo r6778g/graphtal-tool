@@ -26,6 +26,10 @@ wheels/
 # Model files
 model/*.pkl
 model/columns.json
+model-cache/
+training_data/
+formulation_training_data/
+.env
 
 # IDE
 .vscode/

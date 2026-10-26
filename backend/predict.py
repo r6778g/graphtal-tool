@@ -1,7 +1,12 @@
 import joblib
 import numpy as np
 import json
+import logging
 import os
+from pathlib import Path
+import threading
+import time
+import model_registry
 
 SUPPORTED_MODELS = ['ridge', 'lasso', 'svm', 'random_forest']
 DEFAULT_MODEL = 'ridge'
@@ -12,11 +17,26 @@ class Predictor:
         self.models = {}   # {model_type: {target: model}}
         self.scalers = {}  # {model_type: {target: scaler}}
         self.columns_config = None
+        self._lock = threading.RLock()
+        self._sync_lock = threading.Lock()
+        self._registry_models = {}
+        self._registry_versions = {}
+        self._last_registry_check = 0.0
         self.load_models()
 
     def load_models(self):
         """Load all trained models and configuration."""
-        base_dir = 'model' if os.path.exists('model/columns.json') else 'backend/model'
+        backend_root = Path(__file__).resolve().parent
+        base_dir = next(
+            (
+                str(path) for path in (
+                    backend_root / "model",
+                    backend_root.parent / "model",
+                )
+                if (path / "columns.json").exists()
+            ),
+            "model" if os.path.exists("model/columns.json") else "backend/model",
+        )
         columns_file = os.path.join(base_dir, 'columns.json')
 
         try:
@@ -49,28 +69,88 @@ class Predictor:
                         self.models[model_type][output] = joblib.load(flat_model)
                         self.scalers[model_type][output] = joblib.load(flat_scaler)
 
+        pinned = model_registry.load_pinned_local_models(
+            "upstream", self.columns_config.get("inputs", [])
+        )
+        for algorithm, targets in pinned.items():
+            self.models.setdefault(algorithm, {}).update(
+                {target: pair[0] for target, pair in targets.items()}
+            )
+            self.scalers.setdefault(algorithm, {}).update(
+                {target: pair[1] for target, pair in targets.items()}
+            )
+        self._fallback_models = {kind: dict(values) for kind, values in self.models.items()}
+        self._fallback_scalers = {kind: dict(values) for kind, values in self.scalers.items()}
         total = sum(len(v) for v in self.models.values())
         print(f"Loaded {total} model/target combinations across {len(SUPPORTED_MODELS)} model types from {base_dir}")
+
+    def refresh_active(self, force: bool = False) -> dict:
+        """Atomically overlay validated registry models over local fallback models."""
+        if not model_registry.registry_configured():
+            return {"status": "disabled"}
+        interval = max(1, int(os.getenv("MODEL_REGISTRY_REFRESH_SECONDS", "30")))
+        now = time.monotonic()
+        with self._sync_lock:
+            if not force and now - self._last_registry_check < interval:
+                return {"status": "cached", "versions": self._registry_versions}
+            try:
+                active_models, versions = model_registry.load_active_models(
+                    "upstream", self.columns_config.get("inputs", []),
+                    self._registry_versions,
+                )
+                registry_models = {
+                    kind: dict(targets) for kind, targets in self._registry_models.items()
+                }
+                for algorithm, targets in registry_models.items():
+                    for target in list(targets):
+                        if f"{target}:{algorithm}" not in versions:
+                            del targets[target]
+                for algorithm, targets in active_models.items():
+                    registry_models.setdefault(algorithm, {}).update(targets)
+                models = {kind: dict(values) for kind, values in self._fallback_models.items()}
+                scalers = {kind: dict(values) for kind, values in self._fallback_scalers.items()}
+                for algorithm, targets in registry_models.items():
+                    models.setdefault(algorithm, {}).update(
+                        {target: pair[0] for target, pair in targets.items()}
+                    )
+                    scalers.setdefault(algorithm, {}).update(
+                        {target: pair[1] for target, pair in targets.items()}
+                    )
+                with self._lock:
+                    self.models, self.scalers = models, scalers
+                    self._registry_models = registry_models
+                    self._registry_versions = versions
+                self._last_registry_check = now
+                return {"status": "refreshed", "versions": versions}
+            except Exception as exc:
+                self._last_registry_check = now
+                logging.getLogger(__name__).warning(
+                    "Registry refresh failed; retaining the previous working models: %s", exc
+                )
+                return {"status": "failed", "error": str(exc)}
 
 
     def _get_model_and_scaler(self, model_type: str, target: str):
         """Return (model, scaler) for the given type and target, with fallbacks."""
+        self.refresh_active()
         mt = model_type if model_type in SUPPORTED_MODELS else DEFAULT_MODEL
+        with self._lock:
+            models, scalers = self.models, self.scalers
 
         # Try requested type first
-        if target in self.models.get(mt, {}):
-            return self.models[mt][target], self.scalers[mt][target]
+        if target in models.get(mt, {}):
+            return models[mt][target], scalers[mt][target]
 
         # Fallback to ridge
-        if target in self.models.get(DEFAULT_MODEL, {}):
+        if target in models.get(DEFAULT_MODEL, {}):
             print(f"Warning: {mt} model not found for {target}, falling back to {DEFAULT_MODEL}")
-            return self.models[DEFAULT_MODEL][target], self.scalers[DEFAULT_MODEL][target]
+            return models[DEFAULT_MODEL][target], scalers[DEFAULT_MODEL][target]
 
         # Fallback to any available model for this target
         for fallback_type in SUPPORTED_MODELS:
-            if target in self.models.get(fallback_type, {}):
+            if target in models.get(fallback_type, {}):
                 print(f"Warning: falling back to {fallback_type} for {target}")
-                return self.models[fallback_type][target], self.scalers[fallback_type][target]
+                return models[fallback_type][target], scalers[fallback_type][target]
 
         return None, None
 

@@ -200,16 +200,7 @@ To add new features:
 
 ## Production Deployment
 
-For production deployment:
-
-1. Use a production ASGI server (e.g., Gunicorn with Uvicorn workers)
-2. Set up environment variables for configuration
-3. Enable HTTPS
-4. Add authentication/authorization
-5. Set up logging and monitoring
-6. Use a proper database for storing predictions/history
-
-Example production command:
-```bash
-gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-```
+The API is Flask and uses Gunicorn's threaded worker in production. Model
+registry setup, required Render services, environment variables, migration,
+worker startup, Supabase roles, local synchronization, and rollback steps are
+documented in [MODEL_REGISTRY.md](MODEL_REGISTRY.md).

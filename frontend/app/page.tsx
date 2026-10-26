@@ -55,6 +55,12 @@ export default function Home() {
       description: 'Analyze cost and efficiency',
       icon: Activity,
       href: '/upstream'
+    },{
+      id: 'biocatalytic',
+      title: 'Biocatalytic Modeling',
+      description: 'Enzyme Process Modeling',
+      icon: Activity,
+      href: '/upstream'
     }
   ]
 
@@ -121,6 +127,12 @@ export default function Home() {
             )
           })}
         </div>
+        <Link
+          href="/models"
+          className="mt-8 rounded-xl border border-[#e5dcd0] bg-white/80 px-5 py-3 text-sm font-semibold text-[#1e293b] transition-colors hover:bg-white"
+        >
+          Manage model versions
+        </Link>
       </main>
 
       {/* Minimal Footer */}
